@@ -2,7 +2,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Request } from 'express';
-import { JWTConstants } from '../constants';
+import { env } from '../../config/env.config';
 
 type JwtPayload = { sub: string; email: string; tv: number; jti: string };
 
@@ -20,7 +20,7 @@ export class RtStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
         extractRefreshTokenFromCookie,
         ExtractJwt.fromAuthHeaderAsBearerToken(), // fallback
       ]),
-      secretOrKey: JWTConstants.refreshSecret,
+      secretOrKey: env.JWT_RT_SECRET,
       passReqToCallback: true,
       ignoreExpiration: false,
     });

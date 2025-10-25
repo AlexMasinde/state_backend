@@ -33,3 +33,6 @@ export const env = {
   // CORS Configuration
   CORS_ORIGINS: process.env.CORS_ORIGINS,
 };
+
+
+

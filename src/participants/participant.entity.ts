@@ -4,6 +4,7 @@ import {
   Column,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Event } from '../event/event.entity';
 import { User } from '../users/users.entity';
@@ -13,9 +14,11 @@ export class Participant {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Index()
   @Column()
   name: string;
 
+  @Index({ unique: true })
   @Column()
   idNumber: string;
 
@@ -25,6 +28,7 @@ export class Participant {
   @Column()
   origin: string;
 
+  @Index()
   @Column({ default: false })
   checkedIn: boolean;
 
@@ -32,10 +36,12 @@ export class Participant {
   @JoinColumn({ name: 'checkedInBy' })
   checkedInBy: User;
 
+  @Index()
   @ManyToOne(() => Event, (event) => event.participants)
   @JoinColumn({ name: 'eventId' })
   event: Event;
 
+  @Index()
   @Column()
   phoneNumber: string;
 

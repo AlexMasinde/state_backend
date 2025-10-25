@@ -6,13 +6,16 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { AtStrategy } from './strategies/at.strategy';
 import { RtStrategy } from './strategies/rt.strategy';
-import { JWTConstants } from './constants';
+import { env } from '../config/env.config';
 
 @Module({
   imports: [
     UsersModule,
     PassportModule.register({ session: false }),
-    JwtModule.register({}),
+    JwtModule.register({
+      secret: env.JWT_AT_SECRET,
+      signOptions: { expiresIn:  '15m' },
+    }),
   ],
   controllers: [AuthController],
   providers: [AuthService, AtStrategy, RtStrategy],

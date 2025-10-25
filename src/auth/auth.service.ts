@@ -9,7 +9,6 @@ import * as argon2 from 'argon2';
 import { JwtService } from '@nestjs/jwt';
 import { env } from '../config/env.config';
 import { randomUUID } from 'crypto';
-import { JWTConstants } from './constants';
 
 @Injectable()
 export class AuthService {
@@ -94,10 +93,10 @@ export class AuthService {
     email: string,
     tokenVersion: number,
   ) {
-    const atSecret = JWTConstants.accessSecret;
-    const rtSecret = JWTConstants.refreshSecret;
-    const atExpires = JWTConstants.accessExpires;
-    const rtExpires = JWTConstants.refreshExpires;
+    const atSecret = env.JWT_AT_SECRET;
+    const rtSecret = env.JWT_RT_SECRET;
+    const atExpires = '15m';
+    const rtExpires =  '7d';
 
     // jti helps with audit/forensics if you later persist it
     const atJti = randomUUID();

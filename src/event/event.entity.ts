@@ -3,6 +3,7 @@ import {
   Column,
   PrimaryGeneratedColumn,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
 
 export type EventStatus = 'open' | 'in progress' | 'closed' | 'cancelled';
@@ -18,12 +19,14 @@ export class Event {
   @CreateDateColumn()
   dateAdded: Date;
 
+  @Index()
   @Column()
   eventDate: Date;
 
   @Column()
   participants: string; // you can also use JSON if you want a list of participants
 
+  @Index()
   @Column({
     type: 'enum',
     enum: ['open', 'in progress', 'closed', 'cancelled'],
@@ -37,6 +40,7 @@ export class Event {
   @Column({ length: 255 })
   organizer: string;
 
+  @Index()
   @Column({ nullable: true })
   createdBy: string;
 

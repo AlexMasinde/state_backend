@@ -1,5 +1,4 @@
 import { DataSource } from 'typeorm';
-import { env } from './src/config/env.config';
 import * as path from 'path';
 
 // Create SSL configuration if needed
