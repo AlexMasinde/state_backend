@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 import * as path from 'path';
+import { env } from './src/config/env.config';
 
 // Create SSL configuration if needed
 const ca = env.DB_SSL_CA?.replace(/\\n/g, '\n');
