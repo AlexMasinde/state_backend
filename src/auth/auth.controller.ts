@@ -7,6 +7,7 @@ import {
   Post,
   Res,
   UseGuards,
+  Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
@@ -65,9 +66,38 @@ export class AuthController {
     @Body() dto: SignInDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { access_token, refresh } = await this.auth.signin(dto);
-    this.setRefreshCookie(res, refresh);
-    return { access_token };
+    const logger = new Logger('AuthController');
+    
+    try {
+      logger.log(`🚀 Signin request received for email: ${dto.email}`);
+      logger.log(`📊 Request data: email=${dto.email}, passwordLength=${dto.password?.length || 'null'}`);
+      
+      logger.log('🔄 Calling AuthService.signin...');
+      const { access_token, refresh } = await this.auth.signin(dto);
+      
+      logger.log('✅ AuthService.signin completed successfully');
+      logger.log(`📏 Tokens received: accessToken=${access_token?.length || 'null'}, refreshToken=${refresh?.length || 'null'}`);
+      
+      logger.log('🍪 Setting refresh cookie...');
+      this.setRefreshCookie(res, refresh);
+      logger.log('✅ Refresh cookie set successfully');
+      
+      logger.log('🎉 Signin controller completed successfully');
+      return { access_token };
+      
+    } catch (error) {
+      logger.error('💥 Signin controller failed:', error);
+      logger.error('📊 Controller error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        email: dto.email,
+        passwordLength: dto.password?.length || 'null'
+      });
+      
+      // Re-throw to maintain proper HTTP status codes
+      throw error;
+    }
   }
 
   @UseGuards(RtGuard)

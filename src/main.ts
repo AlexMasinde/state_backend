@@ -1,11 +1,49 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as cookieParser from 'cookie-parser';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
 import { env } from './config/env.config';
 import { Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as path from 'path';
+
+// Global exception filter for detailed error logging
+@Catch()
+export class GlobalExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger('GlobalExceptionFilter');
+
+  catch(exception: unknown, host: ArgumentsHost) {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse();
+    const request = ctx.getRequest();
+
+    const status = exception instanceof HttpException 
+      ? exception.getStatus() 
+      : HttpStatus.INTERNAL_SERVER_ERROR;
+
+    const message = exception instanceof HttpException 
+      ? exception.getResponse() 
+      : 'Internal server error';
+
+    this.logger.error('🚨 Global exception caught:', {
+      status,
+      message,
+      url: request.url,
+      method: request.method,
+      body: request.body,
+      headers: request.headers,
+      stack: exception instanceof Error ? exception.stack : 'No stack trace',
+      name: exception instanceof Error ? exception.name : 'Unknown',
+    });
+
+    response.status(status).json({
+      statusCode: status,
+      message: typeof message === 'string' ? message : (message as any).message || 'Internal server error',
+      timestamp: new Date().toISOString(),
+      path: request.url,
+    });
+  }
+}
 
 // Validate required environment variables
 function validateEnvironment() {
@@ -96,6 +134,9 @@ async function bootstrap() {
   await runMigrations();
   
   const app = await NestFactory.create(AppModule);
+
+  // Add global exception filter for detailed error logging
+  app.useGlobalFilters(new GlobalExceptionFilter());
 
   // CORS configuration
   const corsOrigins = env.CORS_ORIGINS?.split(',') || [
