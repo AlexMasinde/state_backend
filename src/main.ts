@@ -175,23 +175,22 @@ async function bootstrap() {
   // Add global exception filter for detailed error logging
   app.useGlobalFilters(new GlobalExceptionFilter());
 
-  // Add comprehensive request logging middleware
+  // Add comprehensive request logging middleware using process.stdout
   app.use((req, res, next) => {
-    const logger = new Logger('RequestLogger');
     const timestamp = new Date().toISOString();
     
-    logger.log(`📡 [${timestamp}] ${req.method} ${req.url}`);
-    logger.log(`🌐 IP: ${req.ip || req.connection.remoteAddress}`);
-    logger.log(`🔗 User-Agent: ${req.get('User-Agent') || 'Unknown'}`);
-    logger.log(`📋 Headers: ${JSON.stringify(req.headers, null, 2)}`);
+    process.stdout.write(`📡 [${timestamp}] ${req.method} ${req.url}\n`);
+    process.stdout.write(`🌐 IP: ${req.ip || req.connection.remoteAddress}\n`);
+    process.stdout.write(`🔗 User-Agent: ${req.get('User-Agent') || 'Unknown'}\n`);
+    process.stdout.write(`📋 Headers: ${JSON.stringify(req.headers)}\n`);
     
     if (req.body && Object.keys(req.body).length > 0) {
-      logger.log(`📦 Body: ${JSON.stringify(req.body, null, 2)}`);
+      process.stdout.write(`📦 Body: ${JSON.stringify(req.body)}\n`);
     }
     
-    logger.log(`📊 Query: ${JSON.stringify(req.query, null, 2)}`);
-    logger.log(`🔍 Params: ${JSON.stringify(req.params, null, 2)}`);
-    logger.log('---');
+    process.stdout.write(`📊 Query: ${JSON.stringify(req.query)}\n`);
+    process.stdout.write(`🔍 Params: ${JSON.stringify(req.params)}\n`);
+    process.stdout.write('---\n');
     
     next();
   });
