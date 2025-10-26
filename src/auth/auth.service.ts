@@ -19,22 +19,60 @@ export class AuthService {
   ) {}
 
   async signup(dto: SignUpDto): Promise<Tokens> {
-    const passwordHash = await argon2.hash(dto.password, {
-      type: argon2.argon2id,
-    });
-    const user = await this.users.create(
-      dto.email.toLowerCase(),
-      dto.name,
-      passwordHash,
-    );
+    const logger = new Logger('AuthService');
+    
+    try {
+      logger.log(`🔐 Starting signup process for email: ${dto.email}`);
+      process.stdout.write(`🔐 Starting signup process for email: ${dto.email}\n`);
+      
+      logger.log('🔐 Step 1: Hashing password with Argon2...');
+      process.stdout.write('🔐 Hashing password with Argon2...\n');
+      const passwordHash = await argon2.hash(dto.password, {
+        type: argon2.argon2id,
+      });
+      logger.log(`✅ Password hashed successfully, hash length: ${passwordHash.length}`);
+      process.stdout.write(`✅ Password hash length: ${passwordHash.length}\n`);
+      
+      logger.log('💾 Step 2: Creating user in database...');
+      process.stdout.write('💾 Creating user in database...\n');
+      const user = await this.users.create(
+        dto.email.toLowerCase(),
+        dto.name,
+        passwordHash,
+      );
+      logger.log(`✅ User created successfully: ID=${user.id}, Email=${user.email}`);
+      process.stdout.write(`✅ User created: ID=${user.id}\n`);
 
-    const { access_token, refresh } = await this.signTokens(
-      user.id,
-      user.email,
-      user.tokenVersion,
-    );
-    await this.storeRefreshToken(user.id, refresh);
-    return { access_token, refresh };
+      logger.log('🎫 Step 3: Signing JWT tokens...');
+      process.stdout.write('🎫 Signing JWT tokens...\n');
+      const { access_token, refresh } = await this.signTokens(
+        user.id,
+        user.email,
+        user.tokenVersion,
+      );
+      logger.log('✅ JWT tokens signed successfully');
+      process.stdout.write('✅ JWT tokens signed\n');
+      
+      logger.log('💾 Step 4: Storing refresh token...');
+      process.stdout.write('💾 Storing refresh token...\n');
+      await this.storeRefreshToken(user.id, refresh);
+      
+      logger.log('✅ Signup process completed successfully');
+      process.stdout.write('✅ Signup process completed successfully\n');
+      return { access_token, refresh };
+      
+    } catch (error) {
+      logger.error('💥 Signup process failed:', error);
+      process.stdout.write(`💥 Signup failed: ${error.name} - ${error.message}\n`);
+      logger.error('📊 Signup error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        code: error.code,
+        email: dto.email
+      });
+      throw error;
+    }
   }
 
   async signin(dto: SignInDto): Promise<Tokens> {

@@ -54,9 +54,47 @@ export class AuthController {
     @Body() dto: SignUpDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { access_token, refresh } = await this.auth.signup(dto);
-    this.setRefreshCookie(res, refresh);
-    return { access_token };
+    const logger = new Logger('AuthController');
+    
+    try {
+      logger.log(`🚀 Signup request received for email: ${dto.email}`);
+      process.stdout.write(`🚀 Signup request received for email: ${dto.email}\n`);
+      logger.log(`📊 Request data: name=${dto.name}, email=${dto.email}, passwordLength=${dto.password?.length || 'null'}`);
+      process.stdout.write(`📊 Signup data: name=${dto.name}, email=${dto.email}, passwordLength=${dto.password?.length || 'null'}\n`);
+      
+      logger.log('🔄 Calling AuthService.signup...');
+      process.stdout.write(`🔄 Calling AuthService.signup...\n`);
+      
+      const { access_token, refresh } = await this.auth.signup(dto);
+      
+      logger.log('✅ AuthService.signup completed successfully');
+      process.stdout.write(`✅ AuthService.signup completed successfully\n`);
+      logger.log(`📏 Tokens received: accessToken=${access_token?.length || 'null'}, refreshToken=${refresh?.length || 'null'}`);
+      process.stdout.write(`📏 Tokens: accessToken=${access_token?.substring(0, 20)}..., refreshToken=${refresh?.substring(0, 20)}...\n`);
+      
+      logger.log('🍪 Setting refresh cookie...');
+      process.stdout.write(`🍪 Setting refresh cookie...\n`);
+      this.setRefreshCookie(res, refresh);
+      
+      logger.log('✅ Signup controller completed successfully');
+      process.stdout.write(`✅ Signup controller completed successfully\n`);
+      return { access_token };
+      
+    } catch (error) {
+      logger.error('💥 Signup controller failed:', error);
+      process.stdout.write(`💥 Signup error: ${error.name} - ${error.message}\n`);
+      logger.error('📊 Controller error details:', {
+        errorName: error.name,
+        message: error.message,
+        stack: error.stack,
+        email: dto.email,
+        userName: dto.name,
+        body: JSON.stringify(dto)
+      });
+      
+      // Re-throw to maintain proper HTTP status codes
+      throw error;
+    }
   }
 
   @Public()
