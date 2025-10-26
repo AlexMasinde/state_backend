@@ -32,7 +32,9 @@ export const env = {
   
   // CORS Configuration
   CORS_ORIGINS: process.env.CORS_ORIGINS,
+  
+  // SMS Leopard Configuration
+  SMS_LEOPARD_SOURCE: process.env.SMS_LEOPARD_SOURCE || '',
+  SMS_LEOPARD_USERNAME: process.env.SMS_LEOPARD_USERNAME || '',
+  SMS_LEOPARD_PASSWORD: process.env.SMS_LEOPARD_PASSWORD || '',
 };
-
-
-

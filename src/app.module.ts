@@ -6,6 +6,7 @@ import { EventModule } from './event/event.module';
 import { AuthModule } from './auth/auth.module';
 import { ParticipantsModule } from './participants/participants.module';
 import { PdfModule } from './pdf/pdf.module';
+import { SmsModule } from './sms/sms.module';
 import { databaseConfig } from './config/database.config';
 
 @Module({
@@ -15,6 +16,7 @@ import { databaseConfig } from './config/database.config';
     ParticipantsModule,
     AuthModule,
     PdfModule,
+    SmsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -12,6 +12,7 @@ import { CreateParticipantDto } from './dto/create-participant.dto';
 import { UpdateParticipantDto } from './dto/update-participant.dto';
 import { EventService } from '../event/event.service';
 import { UsersService } from '../users/users.service';
+import { SmsService } from '../sms/sms.service';
 
 @Injectable()
 export class ParticipantsService {
@@ -22,6 +23,7 @@ export class ParticipantsService {
     private readonly participantRepository: Repository<Participant>,
     private readonly eventService: EventService,
     private readonly usersService: UsersService,
+    private readonly smsService: SmsService,
   ) {}
 
   async create(dto: CreateParticipantDto): Promise<Participant> {
@@ -82,7 +84,24 @@ export class ParticipantsService {
     participant.checkedInBy = user;
     participant.checkedInAt = new Date();
     participant.updatedAt = new Date();
-    return this.participantRepository.save(participant);
+    
+    const savedParticipant = await this.participantRepository.save(participant);
+    
+    // Send SMS confirmation if phone number exists
+    if (participant.phoneNumber && participant.event) {
+      try {
+        await this.smsService.sendCheckInConfirmation(
+          participant.phoneNumber,
+          participant.name,
+          participant.event.eventName
+        );
+      } catch (error) {
+        this.logger.error(`Failed to send SMS to participant ${participant.id}:`, error);
+        // Don't fail the check-in if SMS fails
+      }
+    }
+    
+    return savedParticipant;
   }
 
   async bulkCreate(
