@@ -106,7 +106,7 @@ async function runMigrations() {
     const pendingMigrations = await dataSource.showMigrations();
     if (pendingMigrations) {
       logger.log('📋 Found pending migrations, running...');
-      await dataSource.runMigrations();
+      // await dataSource.runMigrations();
       logger.log('✅ Database migrations completed successfully');
     } else {
       logger.log('✅ No pending migrations found');
@@ -168,7 +168,7 @@ logEnvironmentVariables();
 
 async function bootstrap() {
   // Run migrations before starting the application
-  await runMigrations();
+  // await runMigrations();
   
   const app = await NestFactory.create(AppModule);
 
