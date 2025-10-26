@@ -32,6 +32,8 @@ export const databaseConfig: TypeOrmModuleOptions = {
   synchronize: true,
   // synchronize: env.NODE_ENV !== 'production',
   logging: env.NODE_ENV === 'development',
+  migrations: [],  // Add this
+  migrationsRun: false,  // Add this
 
   // Add connection retry and timeout settings
   retryAttempts: 3,
