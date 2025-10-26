@@ -126,8 +126,45 @@ async function runMigrations() {
   }
 }
 
+// Log environment variables on startup
+function logEnvironmentVariables() {
+  const logger = new Logger('EnvironmentCheck');
+  
+  logger.log('🔐 JWT Environment Variables:');
+  logger.log(`📏 JWT_AT_SECRET: ${env.JWT_AT_SECRET ? `Present (${env.JWT_AT_SECRET.length} chars)` : 'MISSING'}`);
+  logger.log(`📏 JWT_RT_SECRET: ${env.JWT_RT_SECRET ? `Present (${env.JWT_RT_SECRET.length} chars)` : 'MISSING'}`);
+  logger.log(`⏰ JWT_AT_EXPIRES: ${env.JWT_AT_EXPIRES || 'Not set (using default: 15m)'}`);
+  logger.log(`⏰ JWT_RT_EXPIRES: ${env.JWT_RT_EXPIRES || 'Not set (using default: 7d)'}`);
+  
+  // Log first few characters of secrets for verification (not full secrets for security)
+  if (env.JWT_AT_SECRET) {
+    logger.log(`🔑 JWT_AT_SECRET preview: ${env.JWT_AT_SECRET.substring(0, 8)}...`);
+  }
+  if (env.JWT_RT_SECRET) {
+    logger.log(`🔑 JWT_RT_SECRET preview: ${env.JWT_RT_SECRET.substring(0, 8)}...`);
+  }
+  
+  logger.log('🗄️ Database Environment Variables:');
+  logger.log(`🏠 DB_HOST: ${env.DB_HOST || 'MISSING'}`);
+  logger.log(`🔌 DB_PORT: ${env.DB_PORT || 'MISSING'}`);
+  logger.log(`👤 DB_USERNAME: ${env.DB_USERNAME || 'MISSING'}`);
+  logger.log(`🔐 DB_PASSWORD: ${env.DB_PASSWORD ? 'Present' : 'MISSING'}`);
+  logger.log(`📊 DB_DATABASE: ${env.DB_DATABASE || 'MISSING'}`);
+  logger.log(`🔒 DB_SSL: ${env.DB_SSL || 'Not set (default: false)'}`);
+  
+  logger.log('🌐 Application Environment:');
+  logger.log(`🚀 NODE_ENV: ${env.NODE_ENV || 'Not set'}`);
+  logger.log(`🔌 PORT: ${env.PORT || 'Not set (using default: 5100)'}`);
+  logger.log(`🍪 COOKIE_DOMAIN: ${env.COOKIE_DOMAIN || 'Not set'}`);
+  logger.log(`🔒 COOKIE_SECURE: ${env.COOKIE_SECURE || 'Not set (default: false)'}`);
+  logger.log(`🌍 CORS_ORIGINS: ${env.CORS_ORIGINS || 'Not set (using defaults)'}`);
+  
+  logger.log('---');
+}
+
 // Validate environment before starting
 validateEnvironment();
+logEnvironmentVariables();
 
 async function bootstrap() {
   // Run migrations before starting the application
@@ -137,6 +174,27 @@ async function bootstrap() {
 
   // Add global exception filter for detailed error logging
   app.useGlobalFilters(new GlobalExceptionFilter());
+
+  // Add comprehensive request logging middleware
+  app.use((req, res, next) => {
+    const logger = new Logger('RequestLogger');
+    const timestamp = new Date().toISOString();
+    
+    logger.log(`📡 [${timestamp}] ${req.method} ${req.url}`);
+    logger.log(`🌐 IP: ${req.ip || req.connection.remoteAddress}`);
+    logger.log(`🔗 User-Agent: ${req.get('User-Agent') || 'Unknown'}`);
+    logger.log(`📋 Headers: ${JSON.stringify(req.headers, null, 2)}`);
+    
+    if (req.body && Object.keys(req.body).length > 0) {
+      logger.log(`📦 Body: ${JSON.stringify(req.body, null, 2)}`);
+    }
+    
+    logger.log(`📊 Query: ${JSON.stringify(req.query, null, 2)}`);
+    logger.log(`🔍 Params: ${JSON.stringify(req.params, null, 2)}`);
+    logger.log('---');
+    
+    next();
+  });
 
   // CORS configuration
   const corsOrigins = env.CORS_ORIGINS?.split(',') || [
@@ -165,6 +223,13 @@ async function bootstrap() {
 
   const port = parseInt(env.PORT) || 5100;
   await app.listen(port, '0.0.0.0');
-  console.log(`🚀 Application is running on: http://localhost:${port}`);
+  
+  const startupLogger = new Logger('Startup');
+  startupLogger.log('🎉 Application startup completed successfully!');
+  startupLogger.log(`🚀 Server running on port: ${port}`);
+  startupLogger.log(`🌐 Environment: ${env.NODE_ENV || 'development'}`);
+  startupLogger.log(`📡 API endpoint: http://0.0.0.0:${port}/api`);
+  startupLogger.log(`🔐 Auth endpoint: http://0.0.0.0:${port}/api/auth/signin`);
+  startupLogger.log('---');
 }
 bootstrap();
