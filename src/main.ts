@@ -142,53 +142,10 @@ async function runMigrations() {
 function logEnvironmentVariables() {
   const logger = new Logger('EnvironmentCheck');
   
-  logger.log('🔐 JWT Environment Variables:');
-  logger.log(`📏 JWT_AT_SECRET: ${env.JWT_AT_SECRET ? `Present (${env.JWT_AT_SECRET.length} chars)` : 'MISSING'}`);
-  logger.log(`📏 JWT_RT_SECRET: ${env.JWT_RT_SECRET ? `Present (${env.JWT_RT_SECRET.length} chars)` : 'MISSING'}`);
-  logger.log(`⏰ JWT_AT_EXPIRES: ${env.JWT_AT_EXPIRES || 'Not set (using default: 15m)'}`);
-  logger.log(`⏰ JWT_RT_EXPIRES: ${env.JWT_RT_EXPIRES || 'Not set (using default: 7d)'}`);
-  
-  // Log first few characters of secrets for verification (not full secrets for security)
-  if (env.JWT_AT_SECRET) {
-    logger.log(`🔑 JWT_AT_SECRET preview: ${env.JWT_AT_SECRET.substring(0, 8)}...`);
-  }
-  if (env.JWT_RT_SECRET) {
-    logger.log(`🔑 JWT_RT_SECRET preview: ${env.JWT_RT_SECRET.substring(0, 8)}...`);
-  }
-  
-  logger.log('🗄️ Database Environment Variables:');
-  logger.log(`🏠 DB_HOST: ${env.DB_HOST || 'MISSING'}`);
-  logger.log(`🔌 DB_PORT: ${env.DB_PORT || 'MISSING'}`);
-  logger.log(`👤 DB_USERNAME: ${env.DB_USERNAME || 'MISSING'}`);
-  logger.log(`🔐 DB_PASSWORD: ${env.DB_PASSWORD ? 'Present' : 'MISSING'}`);
-  logger.log(`📊 DB_DATABASE: ${env.DB_DATABASE || 'MISSING'}`);
-  logger.log(`🔒 DB_SSL: ${env.DB_SSL || 'Not set (default: false)'}`);
-  
-  logger.log('🌐 Application Environment:');
-  logger.log(`🚀 NODE_ENV: ${env.NODE_ENV || 'Not set'}`);
-  logger.log(`🔌 PORT: ${env.PORT || 'Not set (using default: 5100)'}`);
-  logger.log(`🍪 COOKIE_DOMAIN: ${env.COOKIE_DOMAIN || 'Not set'}`);
-  logger.log(`🔒 COOKIE_SECURE: ${env.COOKIE_SECURE || 'Not set (default: false)'}`);
-  logger.log(`🌍 CORS_ORIGINS: ${env.CORS_ORIGINS || 'Not set (using defaults)'}`);
-  
-  logger.log('☁️  Spaces (S3) Configuration:');
-  logger.log(`🔗 SPACES_ENDPOINT: ${env.SPACES_ENDPOINT || 'NOT SET (bulk upload will fail!)'}`);
-  logger.log(`🗺️  SPACES_REGION: ${env.SPACES_REGION || 'NOT SET'}`);
-  logger.log(`🔑 SPACES_ACCESS_KEY: ${env.SPACES_ACCESS_KEY ? 'Present' : 'NOT SET (bulk upload will fail!)'}`);
-  logger.log(`🔐 SPACES_SECRET_KEY: ${env.SPACES_SECRET_KEY ? 'Present' : 'NOT SET (bulk upload will fail!)'}`);
-  logger.log(`🪣 SPACES_BUCKET_NAME: ${env.SPACES_BUCKET_NAME || 'NOT SET (bulk upload will fail!)'}`);
-  
-  logger.log('📧 Email Configuration:');
-  logger.log(`📮 EMAIL_HOST: ${env.EMAIL_HOST || 'NOT SET'}`);
-  logger.log(`🔌 EMAIL_PORT: ${env.EMAIL_PORT || 'NOT SET'}`);
-  logger.log(`👤 EMAIL_USER: ${env.EMAIL_USER ? 'Present' : 'NOT SET'}`);
-  logger.log(`🔐 EMAIL_PASSWORD: ${env.EMAIL_PASSWORD ? 'Present' : 'NOT SET'}`);
-  
-  logger.log('🗳️  Voter Service Configuration (Optional):');
-  logger.log(`🌐 FRAPPE_API_URL: ${env.FRAPPE_API_URL || 'NOT SET (voter enrichment disabled)'}`);
-  logger.log(`🔑 FRAPPE_API_KEY: ${env.FRAPPE_API_KEY ? 'Present' : 'NOT SET'}`);
-  logger.log(`🔐 FRAPPE_API_SECRET: ${env.FRAPPE_API_SECRET ? 'Present' : 'NOT SET'}`);
-  
+  // Only log critical configuration, not all env vars
+  logger.log('🗄️ Database: Connected');
+  logger.log('🔐 JWT: Configured');
+  logger.log('☁️  Spaces: ' + (env.SPACES_ENDPOINT ? 'Configured' : 'Not configured'));
   logger.log('---');
 }
 
@@ -205,25 +162,8 @@ async function bootstrap() {
   // Add global exception filter for detailed error logging
   app.useGlobalFilters(new GlobalExceptionFilter());
 
-  // Add comprehensive request logging middleware using process.stdout
-  app.use((req, res, next) => {
-    const timestamp = new Date().toISOString();
-    
-    process.stdout.write(`📡 [${timestamp}] ${req.method} ${req.url}\n`);
-    process.stdout.write(`🌐 IP: ${req.ip || req.connection.remoteAddress}\n`);
-    process.stdout.write(`🔗 User-Agent: ${req.get('User-Agent') || 'Unknown'}\n`);
-    process.stdout.write(`📋 Headers: ${JSON.stringify(req.headers)}\n`);
-    
-    if (req.body && Object.keys(req.body).length > 0) {
-      process.stdout.write(`📦 Body: ${JSON.stringify(req.body)}\n`);
-    }
-    
-    process.stdout.write(`📊 Query: ${JSON.stringify(req.query)}\n`);
-    process.stdout.write(`🔍 Params: ${JSON.stringify(req.params)}\n`);
-    process.stdout.write('---\n');
-    
-    next();
-  });
+  // Minimal request logging (removed to prevent memory issues)
+  // Production already has NestJS built-in logging
 
   // CORS configuration
   const corsOrigins = env.CORS_ORIGINS?.split(',') || [
