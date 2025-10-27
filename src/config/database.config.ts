@@ -29,8 +29,8 @@ export const databaseConfig: TypeOrmModuleOptions = {
   database: env.DB_DATABASE,
   autoLoadEntities: true,
   ssl,
-  synchronize: true,
-  // synchronize: env.NODE_ENV !== 'production',
+  // synchronize: true,
+  synchronize: env.NODE_ENV !== 'production',
   logging: env.NODE_ENV === 'development',
 
   // Add connection retry and timeout settings
