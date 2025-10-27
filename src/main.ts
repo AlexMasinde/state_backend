@@ -107,7 +107,7 @@ async function runMigrations() {
       ssl,
       // Connection pooling settings
       extra: {
-        connectionLimit: parseInt(env.DB_CONNECTION_LIMIT) || 20,
+        connectionLimit: parseInt(env.DB_CONNECTION_LIMIT) || 2, // Minimal connections for migration runner
         charset: 'utf8mb4',
       },
     });
@@ -167,10 +167,8 @@ async function bootstrap() {
 
   // CORS configuration
   const corsOrigins = env.CORS_ORIGINS?.split(',') || [
-    'http://localhost:3000',
-    'http://localhost:3002',
-    'http://10.0.2.2:5100',
-    'http://192.168.100.3:5100'
+    // 'http://10.0.2.2:5100',
+    'state-checkin-frontend.vercel.app'
   ];
 
   app.enableCors({
