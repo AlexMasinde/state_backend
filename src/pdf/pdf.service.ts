@@ -7,25 +7,24 @@ import { env } from '../config/env.config';
 
 @Injectable()
 export class PdfService {
-  private getLogoDataUrl(): string | null {
+  private async getLogoDataUrl(): Promise<string | null> {
     try {
-      // Path to the SVG logo in the frontend public folder
-      const logoPath = path.join(process.cwd(), '../frontend/public/cof.svg');
+      // Fetch PNG logo from DigitalOcean Spaces
+      const logoUrl = 'https://mobilizers-bulk-uploads.nyc3.digitaloceanspaces.com/cof.png';
       
-      console.log('🔍 Looking for logo at:', logoPath);
-      console.log('📁 Current working directory:', process.cwd());
+      console.log('🔍 Fetching logo from:', logoUrl);
       
-      if (fs.existsSync(logoPath)) {
-        const svgContent = fs.readFileSync(logoPath, 'utf8');
-        // Convert SVG to base64 data URL
-        const base64 = Buffer.from(svgContent).toString('base64');
+      const response = await fetch(logoUrl);
+      if (response.ok) {
+        const buffer = await response.arrayBuffer();
+        const base64 = Buffer.from(buffer).toString('base64');
         console.log('✅ Logo loaded successfully');
-        return `data:image/svg+xml;base64,${base64}`;
+        return `data:image/png;base64,${base64}`;
       } else {
-        console.warn('⚠️ Logo file not found at:', logoPath);
+        console.warn('⚠️ Could not fetch logo from URL:', response.statusText);
       }
     } catch (error) {
-      console.warn('❌ Could not load logo file:', error.message);
+      console.warn('❌ Could not load logo:', error.message);
     }
     
     // Fallback to text-based logo
@@ -72,7 +71,7 @@ export class PdfService {
       
       // Generate HTML content
       console.log('🎨 Generating HTML content...');
-      const htmlContent = this.generateHtmlContent(eventData, participants);
+      const htmlContent = await this.generateHtmlContent(eventData, participants);
       console.log(`✅ HTML content generated (length: ${htmlContent.length} chars)`);
       
       console.log('📥 Setting page content...');
@@ -107,7 +106,7 @@ export class PdfService {
     }
   }
 
-  private generateHtmlContent(eventData: any, participants: any[]): string {
+  private async generateHtmlContent(eventData: any, participants: any[]): Promise<string> {
     console.log('🎨 Starting HTML content generation...');
     
     const checkedInParticipants = participants.filter(p => p.checkedIn);
@@ -119,7 +118,7 @@ export class PdfService {
     console.log(`📊 Stats: Total: ${totalParticipants}, Checked In: ${checkedInCount}, Rate: ${checkInRate}%`);
 
     // Get logo data URL
-    const logoDataUrl = this.getLogoDataUrl();
+    const logoDataUrl = await this.getLogoDataUrl();
 
     // Group statistics
     const groupStats = participants.reduce((acc: any, participant: any) => {
