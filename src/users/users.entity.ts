@@ -22,6 +22,9 @@ export class User {
   @Column({ type: 'varchar', length: 255 })
   passwordHash: string;
 
+  @Column({ type: 'varchar', length: 50, default: 'user' })
+  role: string;
+
   @Column({ type: 'varchar', length: 255, nullable: true })
   refreshTokenHash: string | null;
 

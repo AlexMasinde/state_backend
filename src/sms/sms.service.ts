@@ -62,7 +62,9 @@ export class SmsService {
     eventName: string
   ): Promise<boolean> {
     try {
-      const message = `Dear ${participantName}, you have been successfully checked in to ${eventName}. Thank you for attending!`;
+      // Extract first name by splitting on first space
+      const firstName = participantName.split(' ')[0];
+      const message = `Hello ${firstName}, you have been successfully checked in to ${eventName}. Thank you for attending!`;
       return await this.sendSMS(phoneNumber, message);
     } catch (error) {
       this.logger.error(`Failed to send check-in confirmation:`, error);

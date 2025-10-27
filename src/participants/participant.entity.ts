@@ -48,6 +48,37 @@ export class Participant {
   @Column({ nullable: true, type: 'timestamp' })
   checkedInAt: Date;
 
+  // Voter service fields (all optional)
+  @Column({ nullable: true })
+  county: string;
+
+  @Column({ nullable: true })
+  constituency: string;
+
+  @Column({ nullable: true })
+  ward: string;
+
+  @Column({ nullable: true })
+  pollingStation: string;
+
+  @Column({ nullable: true, default: false })
+  registeredVoter: boolean;
+
+  @Column({ nullable: true })
+  tribe: string;
+
+  @Column({ nullable: true })
+  clan: string;
+
+  @Column({ nullable: true })
+  family: string;
+
+  @Column({ nullable: true })
+  gender: string;
+
+  @Column({ nullable: true, type: 'date' })
+  dateOfBirth: Date;
+
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 

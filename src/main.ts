@@ -65,6 +65,18 @@ function validateEnvironment() {
     process.exit(1);
   }
 
+  // Validate optional but important environment variables for bulk upload
+  logger.log('📋 Checking optional environment variables for bulk upload...');
+  
+  const spacesVars = ['SPACES_ENDPOINT', 'SPACES_ACCESS_KEY', 'SPACES_SECRET_KEY', 'SPACES_BUCKET_NAME'];
+  const missingSpacesVars = spacesVars.filter(envVar => !env[envVar as keyof typeof env]);
+  
+  if (missingSpacesVars.length > 0) {
+    logger.warn(`⚠️  Missing Spaces configuration (bulk upload will fail): ${missingSpacesVars.join(', ')}`);
+  } else {
+    logger.log('✅ Spaces configuration is present');
+  }
+
   logger.log('✅ Environment validation passed');
 }
 
@@ -158,6 +170,24 @@ function logEnvironmentVariables() {
   logger.log(`🍪 COOKIE_DOMAIN: ${env.COOKIE_DOMAIN || 'Not set'}`);
   logger.log(`🔒 COOKIE_SECURE: ${env.COOKIE_SECURE || 'Not set (default: false)'}`);
   logger.log(`🌍 CORS_ORIGINS: ${env.CORS_ORIGINS || 'Not set (using defaults)'}`);
+  
+  logger.log('☁️  Spaces (S3) Configuration:');
+  logger.log(`🔗 SPACES_ENDPOINT: ${env.SPACES_ENDPOINT || 'NOT SET (bulk upload will fail!)'}`);
+  logger.log(`🗺️  SPACES_REGION: ${env.SPACES_REGION || 'NOT SET'}`);
+  logger.log(`🔑 SPACES_ACCESS_KEY: ${env.SPACES_ACCESS_KEY ? 'Present' : 'NOT SET (bulk upload will fail!)'}`);
+  logger.log(`🔐 SPACES_SECRET_KEY: ${env.SPACES_SECRET_KEY ? 'Present' : 'NOT SET (bulk upload will fail!)'}`);
+  logger.log(`🪣 SPACES_BUCKET_NAME: ${env.SPACES_BUCKET_NAME || 'NOT SET (bulk upload will fail!)'}`);
+  
+  logger.log('📧 Email Configuration:');
+  logger.log(`📮 EMAIL_HOST: ${env.EMAIL_HOST || 'NOT SET'}`);
+  logger.log(`🔌 EMAIL_PORT: ${env.EMAIL_PORT || 'NOT SET'}`);
+  logger.log(`👤 EMAIL_USER: ${env.EMAIL_USER ? 'Present' : 'NOT SET'}`);
+  logger.log(`🔐 EMAIL_PASSWORD: ${env.EMAIL_PASSWORD ? 'Present' : 'NOT SET'}`);
+  
+  logger.log('🗳️  Voter Service Configuration (Optional):');
+  logger.log(`🌐 FRAPPE_API_URL: ${env.FRAPPE_API_URL || 'NOT SET (voter enrichment disabled)'}`);
+  logger.log(`🔑 FRAPPE_API_KEY: ${env.FRAPPE_API_KEY ? 'Present' : 'NOT SET'}`);
+  logger.log(`🔐 FRAPPE_API_SECRET: ${env.FRAPPE_API_SECRET ? 'Present' : 'NOT SET'}`);
   
   logger.log('---');
 }

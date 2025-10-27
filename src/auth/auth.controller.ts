@@ -152,7 +152,7 @@ export class AuthController {
     return {
       access_token: tokens.access_token,
       user: dbUser
-        ? { userId: dbUser.id, email: dbUser.email, name: dbUser.name }
+        ? { userId: dbUser.id, email: dbUser.email, name: dbUser.name, role: dbUser.role }
         : null,
     };
   }
@@ -173,6 +173,11 @@ export class AuthController {
   @Get('me')
   async me(@GetUser() user: any) {
     const dbUser = await this.usersService.findById(user.sub);
-    return { userId: user.sub, email: user.email, name: dbUser?.name || null };
+    return { 
+      userId: user.sub, 
+      email: user.email, 
+      name: dbUser?.name || null,
+      role: dbUser?.role || 'user'
+    };
   }
 }

@@ -14,6 +14,8 @@ import { EventService } from './event.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { AtGuard } from '../auth/guards/at.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 
 export type EventWithCreator = {
@@ -31,12 +33,13 @@ export type EventWithCreator = {
   dateModified?: Date | null;
 };
 
-@UseGuards(AtGuard)
+@UseGuards(AtGuard, RolesGuard)
 @Controller('events')
 export class EventController {
   constructor(private readonly eventService: EventService) {}
 
   @Post()
+  @Roles('admin') // Only admins can create events
   @UsePipes(new ValidationPipe({ whitelist: true }))
   create(
     @Body() createEventDto: CreateEventDto,
@@ -56,6 +59,7 @@ export class EventController {
   }
 
   @Patch(':id')
+  @Roles('admin') // Only admins can update events
   @UsePipes(new ValidationPipe({ whitelist: true }))
   update(
     @Param('id') eventId: string,
@@ -66,6 +70,7 @@ export class EventController {
   }
 
   @Delete(':id')
+  @Roles('admin') // Only admins can delete events
   remove(@Param('id') eventId: string): Promise<void> {
     return this.eventService.remove(eventId);
   }

@@ -37,4 +37,24 @@ export const env = {
   SMS_LEOPARD_SOURCE: process.env.SMS_LEOPARD_SOURCE || '',
   SMS_LEOPARD_USERNAME: process.env.SMS_LEOPARD_USERNAME || '',
   SMS_LEOPARD_PASSWORD: process.env.SMS_LEOPARD_PASSWORD || '',
+  
+  // Email Configuration
+  EMAIL_HOST: process.env.EMAIL_HOST || 'smtp.gmail.com',
+  EMAIL_PORT: parseInt(process.env.EMAIL_PORT || '465'),
+  EMAIL_USER: process.env.EMAIL_USER || '',
+  EMAIL_PASSWORD: process.env.EMAIL_PASSWORD || '',
+  EMAIL_FROM: process.env.EMAIL_FROM || '',
+  EMAIL_FROM_NAME: process.env.EMAIL_FROM_NAME || 'Statehouse Event Management',
+
+  // Voter Service Configuration (Optional - Frappe API)
+  FRAPPE_API_URL: process.env.FRAPPE_API_URL || '',
+  FRAPPE_API_KEY: process.env.FRAPPE_API_KEY || '',
+  FRAPPE_API_SECRET: process.env.FRAPPE_API_SECRET || '',
+
+  // Spaces Configuration (DigitalOcean Spaces)
+  SPACES_ENDPOINT: process.env.SPACES_ENDPOINT || '',
+  SPACES_REGION: process.env.SPACES_REGION || '',
+  SPACES_ACCESS_KEY: process.env.SPACES_ACCESS_KEY || '',
+  SPACES_SECRET_KEY: process.env.SPACES_SECRET_KEY || '',
+  SPACES_BUCKET_NAME: process.env.SPACES_BUCKET_NAME || '',
 };

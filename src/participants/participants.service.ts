@@ -13,6 +13,7 @@ import { UpdateParticipantDto } from './dto/update-participant.dto';
 import { EventService } from '../event/event.service';
 import { UsersService } from '../users/users.service';
 import { SmsService } from '../sms/sms.service';
+import { VoterService } from '../voter/voter.service';
 
 @Injectable()
 export class ParticipantsService {
@@ -24,18 +25,25 @@ export class ParticipantsService {
     private readonly eventService: EventService,
     private readonly usersService: UsersService,
     private readonly smsService: SmsService,
+    private readonly voterService: VoterService,
   ) {}
 
   async create(dto: CreateParticipantDto): Promise<Participant> {
     const event = await this.eventService.findOne(dto.eventId);
     if (!event) throw new NotFoundException('Event not found');
+    
+    // Enrich with voter data if available
+    const enrichedData = await this.enrichWithVoterData(dto);
     const now = new Date();
-    const participant = this.participantRepository.create({
-      ...dto,
+    
+    const participant = new Participant();
+    Object.assign(participant, {
+      ...enrichedData,
       event,
       createdAt: now,
       updatedAt: now,
     });
+    
     return this.participantRepository.save(participant);
   }
 
@@ -119,17 +127,50 @@ export class ParticipantsService {
     }
 
     const now = new Date();
-    const participants = dtos.map((dto) =>
-      this.participantRepository.create({
-        ...dto,
-        event,
-        createdAt: now,
-        updatedAt: now,
-      }),
-    );
     
-    await this.participantRepository.insert(participants);
-    return { success: true, count: participants.length };
+    // For large datasets (100+ participants), use query builder for better performance
+    if (dtos.length > 100) {
+      const chunkSize = 500; // Insert in chunks of 500 for optimal database performance
+      const totalChunks = Math.ceil(dtos.length / chunkSize);
+      
+      for (let i = 0; i < totalChunks; i++) {
+        const chunk = dtos.slice(i * chunkSize, (i + 1) * chunkSize);
+        
+        const values = chunk.map((dto) => ({
+          name: dto.name,
+          idNumber: dto.idNumber,
+          phoneNumber: dto.phoneNumber,
+          group: dto.group,
+          origin: dto.origin,
+          eventId: event.eventId,
+          createdAt: now,
+          updatedAt: now,
+        }));
+
+        // Use createQueryBuilder for better performance
+        await this.participantRepository
+          .createQueryBuilder()
+          .insert()
+          .into('participant')
+          .values(values)
+          .execute();
+      }
+      
+      return { success: true, count: dtos.length };
+    } else {
+      // For smaller datasets, use the standard insert
+      const participants = dtos.map((dto) =>
+        this.participantRepository.create({
+          ...dto,
+          event,
+          createdAt: now,
+          updatedAt: now,
+        }),
+      );
+      
+      await this.participantRepository.insert(participants);
+      return { success: true, count: participants.length };
+    }
   }
 
   async search(eventId: string, searchTerm: string): Promise<Participant[]> {
@@ -177,5 +218,57 @@ export class ParticipantsService {
       notCheckedIn,
       checkInRate,
     };
+  }
+
+  // Helper method to enrich participant data with voter information
+  private async enrichWithVoterData(dto: CreateParticipantDto): Promise<any> {
+    const normalizedIdNumber = String(dto.idNumber).trim();
+    
+    // Try to fetch voter data
+    const voterData = await this.voterService.checkVoterRegistration(normalizedIdNumber);
+    
+    if (voterData && voterData.isRegisteredVoter) {
+      // Person found in voter register - use voter data
+      return {
+        name: voterData.fullName || dto.name, // Use voter name if available
+        idNumber: normalizedIdNumber,
+        phoneNumber: dto.phoneNumber,
+        group: dto.group,
+        origin: dto.origin,
+        checkedIn: false, // Required field
+        // Voter data
+        county: voterData.county,
+        constituency: voterData.constituency,
+        ward: voterData.ward,
+        pollingStation: voterData.pollingStation,
+        registeredVoter: true,
+        tribe: voterData.tribe,
+        clan: voterData.clan,
+        family: voterData.family,
+        gender: voterData.gender,
+        dateOfBirth: voterData.dateOfBirth,
+      };
+    } else {
+      // Person NOT found - use basic data only
+      return {
+        name: dto.name,
+        idNumber: normalizedIdNumber,
+        phoneNumber: dto.phoneNumber,
+        group: dto.group,
+        origin: dto.origin,
+        checkedIn: false, // Required field
+        // No voter data
+        county: null,
+        constituency: null,
+        ward: null,
+        pollingStation: null,
+        registeredVoter: false,
+        tribe: null,
+        clan: null,
+        family: null,
+        gender: null,
+        dateOfBirth: null,
+      };
+    }
   }
 }
