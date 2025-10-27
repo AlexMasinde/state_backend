@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import * as puppeteer from 'puppeteer';
 import * as path from 'path';
 import * as fs from 'fs';
+import { env } from '../config/env.config';
+
 
 @Injectable()
 export class PdfService {
@@ -36,12 +38,31 @@ export class PdfService {
     console.log(`📊 Event data:`, { eventName: eventData?.eventName, eventDate: eventData?.eventDate });
     console.log(`👥 Participants count: ${participants?.length || 0}`);
     
+    const isProd = env.NODE_ENV === 'production';
+    const executablePath = env.PUPPETEER_EXECUTABLE_PATH || undefined;
+    
+    console.log(`🌍 Environment: ${isProd ? 'Production' : 'Development'}`);
+    if (executablePath) {
+      console.log(`📍 Using Chrome at: ${executablePath}`);
+    } else {
+      console.log('📍 Using default Chrome/Chromium');
+    }
+    
     let browser;
     try {
       console.log('🚀 Launching Puppeteer browser...');
       browser = await puppeteer.launch({
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        executablePath: executablePath,
+        args: isProd
+          ? [
+              '--no-sandbox', 
+              '--disable-setuid-sandbox',
+              '--disable-dev-shm-usage',
+              '--disable-gpu',
+              '--single-process'
+            ]
+          : [],
       });
       console.log('✅ Browser launched successfully');
 

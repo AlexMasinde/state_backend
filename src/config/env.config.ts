@@ -57,4 +57,7 @@ export const env = {
   SPACES_ACCESS_KEY: process.env.SPACES_ACCESS_KEY || '',
   SPACES_SECRET_KEY: process.env.SPACES_SECRET_KEY || '',
   SPACES_BUCKET_NAME: process.env.SPACES_BUCKET_NAME || '',
+  
+  // Puppeteer Configuration
+  PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH,
 };
