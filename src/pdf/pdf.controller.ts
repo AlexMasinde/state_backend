@@ -20,14 +20,20 @@ export class PdfController {
     @Res() res: Response,
   ) {
     try {
+      console.log('📄 PDF Generation started for event:', eventId);
+      
       // Fetch event data
       const event = await this.eventService.findOne(eventId);
+      console.log('✅ Event found:', event?.eventName);
+      
       if (!event) {
         return res.status(404).json({ message: 'Event not found' });
       }
 
       // Fetch participants for this event
+      console.log('👥 Fetching participants...');
       const participants = await this.participantsService.findAll(eventId);
+      console.log(`✅ Found ${participants?.length || 0} participants`);
 
       // Prepare event data for PDF
       const eventData = {
@@ -37,7 +43,9 @@ export class PdfController {
       };
 
       // Generate PDF
+      console.log('📄 Generating PDF...');
       const pdfBuffer = await this.pdfService.generateEventReport(eventData, participants);
+      console.log(`✅ PDF generated, size: ${pdfBuffer.length} bytes`);
 
       // Set response headers for PDF download
       const fileName = `Event_Report_${event.eventName.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
@@ -50,8 +58,11 @@ export class PdfController {
 
       // Stream the PDF to the client
       res.send(pdfBuffer);
+      console.log('✅ PDF sent to client');
+      
     } catch (error) {
-      console.error('Error generating PDF report:', error);
+      console.error('❌ Error generating PDF report:', error);
+      console.error('Error stack:', error.stack);
       res.status(500).json({ 
         message: 'Error generating PDF report',
         error: error.message 

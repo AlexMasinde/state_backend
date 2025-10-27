@@ -5,40 +5,61 @@ import * as fs from 'fs';
 
 @Injectable()
 export class PdfService {
-  private getLogoDataUrl(): string {
+  private getLogoDataUrl(): string | null {
     try {
       // Path to the SVG logo in the frontend public folder
       const logoPath = path.join(process.cwd(), '../frontend/public/cof.svg');
+      
+      console.log('🔍 Looking for logo at:', logoPath);
+      console.log('📁 Current working directory:', process.cwd());
       
       if (fs.existsSync(logoPath)) {
         const svgContent = fs.readFileSync(logoPath, 'utf8');
         // Convert SVG to base64 data URL
         const base64 = Buffer.from(svgContent).toString('base64');
+        console.log('✅ Logo loaded successfully');
         return `data:image/svg+xml;base64,${base64}`;
+      } else {
+        console.warn('⚠️ Logo file not found at:', logoPath);
       }
     } catch (error) {
-      console.warn('Could not load logo file:', error.message);
+      console.warn('❌ Could not load logo file:', error.message);
     }
     
     // Fallback to text-based logo
+    console.log('📝 Using text-based logo fallback');
     return null;
   }
 
   async generateEventReport(eventData: any, participants: any[]): Promise<Buffer> {
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-
+    console.log('🤖 Starting PDF generation with Puppeteer...');
+    console.log(`📊 Event data:`, { eventName: eventData?.eventName, eventDate: eventData?.eventDate });
+    console.log(`👥 Participants count: ${participants?.length || 0}`);
+    
+    let browser;
     try {
+      console.log('🚀 Launching Puppeteer browser...');
+      browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
+      console.log('✅ Browser launched successfully');
+
+      console.log('📄 Creating new page...');
       const page = await browser.newPage();
+      console.log('✅ Page created');
       
       // Generate HTML content
+      console.log('🎨 Generating HTML content...');
       const htmlContent = this.generateHtmlContent(eventData, participants);
+      console.log(`✅ HTML content generated (length: ${htmlContent.length} chars)`);
       
+      console.log('📥 Setting page content...');
       await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+      console.log('✅ Page content set');
       
       // Generate PDF
+      console.log('📄 Generating PDF from page...');
       const pdfBuffer = await page.pdf({
         format: 'A4',
         printBackground: true,
@@ -49,19 +70,32 @@ export class PdfService {
           left: '15mm'
         }
       });
+      console.log(`✅ PDF generated successfully (size: ${pdfBuffer.length} bytes)`);
 
       return Buffer.from(pdfBuffer);
+    } catch (error) {
+      console.error('❌ Error during PDF generation:', error.message);
+      console.error('Error stack:', error.stack);
+      throw error;
     } finally {
-      await browser.close();
+      if (browser) {
+        console.log('🔒 Closing browser...');
+        await browser.close();
+        console.log('✅ Browser closed');
+      }
     }
   }
 
   private generateHtmlContent(eventData: any, participants: any[]): string {
+    console.log('🎨 Starting HTML content generation...');
+    
     const checkedInParticipants = participants.filter(p => p.checkedIn);
     const totalParticipants = participants.length;
     const checkedInCount = checkedInParticipants.length;
     const notCheckedInCount = totalParticipants - checkedInCount;
     const checkInRate = totalParticipants > 0 ? Math.round((checkedInCount / totalParticipants) * 100) : 0;
+
+    console.log(`📊 Stats: Total: ${totalParticipants}, Checked In: ${checkedInCount}, Rate: ${checkInRate}%`);
 
     // Get logo data URL
     const logoDataUrl = this.getLogoDataUrl();
