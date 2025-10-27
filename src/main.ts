@@ -168,7 +168,7 @@ async function bootstrap() {
   // CORS configuration
   const corsOrigins = env.CORS_ORIGINS?.split(',') || [
     // 'http://10.0.2.2:5100',
-    'state-checkin-frontend.vercel.app'
+    'https://state-checkin-frontend.vercel.app/'
   ];
 
   app.enableCors({
