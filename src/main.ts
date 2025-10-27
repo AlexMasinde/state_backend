@@ -166,9 +166,9 @@ async function bootstrap() {
   // Production already has NestJS built-in logging
 
   // CORS configuration
-  const corsOrigins = env.CORS_ORIGINS?.split(',') || [
+  const corsOrigins =  [
     // 'http://10.0.2.2:5100',
-    'https://state-checkin-frontend.vercel.app/'
+    'https://state-checkin-frontend.vercel.app'
   ];
 
   app.enableCors({
