@@ -168,6 +168,7 @@ async function bootstrap() {
   // CORS configuration
   const corsOrigins =  [
     // 'http://10.0.2.2:5100',
+    "http://localhost:3000",
     'https://state-checkin-frontend.vercel.app'
   ];
 

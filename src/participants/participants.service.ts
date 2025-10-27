@@ -95,19 +95,19 @@ export class ParticipantsService {
     
     const savedParticipant = await this.participantRepository.save(participant);
     
-    // Send SMS confirmation if phone number exists
-    if (participant.phoneNumber && participant.event) {
-      try {
-        await this.smsService.sendCheckInConfirmation(
-          participant.phoneNumber,
-          participant.name,
-          participant.event.eventName
-        );
-      } catch (error) {
-        this.logger.error(`Failed to send SMS to participant ${participant.id}:`, error);
-        // Don't fail the check-in if SMS fails
-      }
-    }
+    // // Send SMS confirmation if phone number exists
+    // if (participant.phoneNumber && participant.event) {
+    //   try {
+    //     await this.smsService.sendCheckInConfirmation(
+    //       participant.phoneNumber,
+    //       participant.name,
+    //       participant.event.eventName
+    //     );
+    //   } catch (error) {
+    //     this.logger.error(`Failed to send SMS to participant ${participant.id}:`, error);
+    //     // Don't fail the check-in if SMS fails
+    //   }
+    // }
     
     return savedParticipant;
   }
