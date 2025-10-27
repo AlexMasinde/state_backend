@@ -39,7 +39,7 @@ export class PdfService {
     console.log(`👥 Participants count: ${participants?.length || 0}`);
     
     const isProd = env.NODE_ENV === 'production';
-    const executablePath = env.PUPPETEER_EXECUTABLE_PATH || undefined;
+    const executablePath = isProd ? '/usr/bin/chromium' : undefined;
     
     console.log(`🌍 Environment: ${isProd ? 'Production' : 'Development'}`);
     if (executablePath) {

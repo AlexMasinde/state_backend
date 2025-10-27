@@ -59,5 +59,5 @@ export const env = {
   SPACES_BUCKET_NAME: process.env.SPACES_BUCKET_NAME || '',
   
   // Puppeteer Configuration
-  PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+  PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH 
 };
