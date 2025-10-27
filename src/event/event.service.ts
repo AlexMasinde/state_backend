@@ -74,9 +74,35 @@ export class EventService {
 
   async findOne(eventId: string): Promise<any> {
     try {
-      const event = await this.eventRepository.findOne({ where: { eventId } });
-      if (!event)
+      this.logger.log(`🔍 Looking for event: ${eventId}`);
+      console.log(`🔍 Looking for event: ${eventId}`);
+      
+      // Check database connection
+      const isConnected = this.eventRepository.manager.connection.isConnected;
+      this.logger.log(`📡 Database connected: ${isConnected}`);
+      console.log(`📡 Database connected: ${isConnected}`);
+      
+      // Try the query with explicit logging
+      const queryBuilder = this.eventRepository.createQueryBuilder('event');
+      const event = await queryBuilder
+        .where('event.eventId = :eventId', { eventId })
+        .getOne();
+      
+      this.logger.log(`📊 Query result: ${event ? 'Found' : 'Not found'}`);
+      console.log(`📊 Query result: ${event ? 'Found' : 'Not found'}`);
+      
+      if (!event) {
+        // Try direct SQL to see if we get a different result
+        const directQuery = await this.eventRepository.query(
+          'SELECT * FROM events WHERE eventId = ?',
+          [eventId]
+        );
+        this.logger.log(`🔧 Direct query result: ${directQuery.length} rows`);
+        console.log(`🔧 Direct query result: ${directQuery.length} rows`);
+        
         throw new NotFoundException(`Event with ID ${eventId} not found`);
+      }
+      
       let createdByName: string | null = null;
       if (event.createdBy) {
         const user = await this.usersService.findById(event.createdBy);
