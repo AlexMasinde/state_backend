@@ -27,23 +27,31 @@ export class AuthController {
   ) {}
 
   private setRefreshCookie(res: Response, token: string) {
+    const isProduction = env.NODE_ENV === 'production';
+    const secure = isProduction || env.COOKIE_SECURE === 'true';
+    const domain = isProduction && env.COOKIE_DOMAIN ? env.COOKIE_DOMAIN : undefined;
+    
     res.cookie('rt', token, {
       httpOnly: true,
-      sameSite: 'lax', // or 'strict'
-      secure: false,
+      sameSite: secure ? 'none' : 'lax', // 'none' requires secure: true for cross-site cookies
+      secure: secure,
       path: '/',
       maxAge: 1000 * 60 * 60 * 24 * 7,
+      ...(domain && { domain }),
     });
   }
 
   private clearRefreshCookie(res: Response) {
-    const secure = env.COOKIE_SECURE === 'true';
-    const domain = env.COOKIE_DOMAIN;
+    const isProduction = env.NODE_ENV === 'production';
+    const secure = isProduction || env.COOKIE_SECURE === 'true';
+    const domain = isProduction && env.COOKIE_DOMAIN ? env.COOKIE_DOMAIN : undefined;
+    
     res.clearCookie('rt', {
       httpOnly: true,
-      sameSite: 'none',
-      secure: false,
+      sameSite: secure ? 'none' : 'lax',
+      secure: secure,
       path: '/',
+      ...(domain && { domain }),
     });
   }
 
