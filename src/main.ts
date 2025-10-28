@@ -169,7 +169,8 @@ async function bootstrap() {
   const corsOrigins =  [
     // 'http://10.0.2.2:5100',
     "http://localhost:3000",
-    'https://state-checkin-frontend.vercel.app'
+    'https://state-checkin-frontend.vercel.app', 
+    'https://checkin-gjd8y.ondigitalocean.app'
   ];
 
   app.enableCors({

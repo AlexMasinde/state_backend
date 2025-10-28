@@ -141,6 +141,27 @@ export class PdfService {
       checkInRate: groupStats[groupName].total > 0 ? Math.round((groupStats[groupName].checkedIn / groupStats[groupName].total) * 100) : 0,
     })).sort((a, b) => b.total - a.total);
 
+    // Origin statistics
+    const originStats = participants.reduce((acc: any, participant: any) => {
+      const originName = participant.origin || 'Unassigned';
+      if (!acc[originName]) {
+        acc[originName] = { total: 0, checkedIn: 0 };
+      }
+      acc[originName].total++;
+      if (participant.checkedIn) {
+        acc[originName].checkedIn++;
+      }
+      return acc;
+    }, {});
+
+    const originStatsArray = Object.keys(originStats).map(originName => ({
+      originName,
+      total: originStats[originName].total,
+      checkedIn: originStats[originName].checkedIn,
+      notCheckedIn: originStats[originName].total - originStats[originName].checkedIn,
+      checkInRate: originStats[originName].total > 0 ? Math.round((originStats[originName].checkedIn / originStats[originName].total) * 100) : 0,
+    })).sort((a, b) => b.total - a.total);
+
     return `
 <!DOCTYPE html>
 <html lang="en">
@@ -427,6 +448,30 @@ export class PdfService {
                     <td>${group.checkedIn}</td>
                     <td>${group.notCheckedIn}</td>
                     <td>${group.checkInRate}%</td>
+                </tr>
+            `).join('')}
+        </tbody>
+    </table>
+
+    <div class="section-header">ATTENDANCE BY ORIGIN</div>
+    <table class="group-table">
+        <thead>
+            <tr>
+                <th style="width: 30%;">Origin</th>
+                <th style="width: 15%;">Total</th>
+                <th style="width: 15%;">Checked In</th>
+                <th style="width: 15%;">Not Checked In</th>
+                <th style="width: 15%;">Check-in Rate</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${originStatsArray.map(origin => `
+                <tr>
+                    <td style="text-align: left;">${origin.originName}</td>
+                    <td>${origin.total}</td>
+                    <td>${origin.checkedIn}</td>
+                    <td>${origin.notCheckedIn}</td>
+                    <td>${origin.checkInRate}%</td>
                 </tr>
             `).join('')}
         </tbody>
