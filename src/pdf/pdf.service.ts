@@ -37,22 +37,25 @@ export class PdfService {
     console.log(`📊 Event data:`, { eventName: eventData?.eventName, eventDate: eventData?.eventDate });
     console.log(`👥 Participants count: ${participants?.length || 0}`);
     
+    // Use PUPPETEER_EXECUTABLE_PATH if explicitly set, otherwise determine based on environment
     const isProd = env.NODE_ENV === 'production';
-    const executablePath = isProd ? '/usr/bin/chromium' : undefined;
+    const executablePath = env.PUPPETEER_EXECUTABLE_PATH 
+      ? env.PUPPETEER_EXECUTABLE_PATH 
+      : (isProd ? '/usr/bin/chromium' : undefined);
     
     console.log(`🌍 Environment: ${isProd ? 'Production' : 'Development'}`);
     if (executablePath) {
       console.log(`📍 Using Chrome at: ${executablePath}`);
     } else {
-      console.log('📍 Using default Chrome/Chromium');
+      console.log('📍 Using default Puppeteer Chromium (will use bundled or system Chrome)');
     }
     
     let browser;
     try {
       console.log('🚀 Launching Puppeteer browser...');
-      browser = await puppeteer.launch({
+      
+      const launchOptions: any = {
         headless: true,
-        executablePath: executablePath,
         args: isProd
           ? [
               '--no-sandbox', 
@@ -62,7 +65,14 @@ export class PdfService {
               '--single-process'
             ]
           : [],
-      });
+      };
+      
+      // Only set executablePath if it's defined (don't pass undefined)
+      if (executablePath) {
+        launchOptions.executablePath = executablePath;
+      }
+      
+      browser = await puppeteer.launch(launchOptions);
       console.log('✅ Browser launched successfully');
 
       console.log('📄 Creating new page...');
@@ -81,7 +91,8 @@ export class PdfService {
         waitUntil: 'domcontentloaded',
         timeout: 0, // DOMContentLoaded can easily take >30s with 1000s of rows
       });
-      await page.waitForTimeout(500); // settle layout before printing
+      // Small delay to ensure layout is settled (using Promise instead of deprecated waitForTimeout)
+      await new Promise(resolve => setTimeout(resolve, 500));
       console.log('✅ Page content set');
       
       // Generate PDF
