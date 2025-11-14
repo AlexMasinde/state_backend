@@ -67,6 +67,8 @@ export class PdfService {
 
       console.log('📄 Creating new page...');
       const page = await browser.newPage();
+      page.setDefaultTimeout(120000); // allow Chromium enough time to render huge tables
+      page.setDefaultNavigationTimeout(120000);
       console.log('✅ Page created');
       
       // Generate HTML content
@@ -75,7 +77,11 @@ export class PdfService {
       console.log(`✅ HTML content generated (length: ${htmlContent.length} chars)`);
       
       console.log('📥 Setting page content...');
-      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+      await page.setContent(htmlContent, { 
+        waitUntil: 'domcontentloaded',
+        timeout: 0, // DOMContentLoaded can easily take >30s with 1000s of rows
+      });
+      await page.waitForTimeout(500); // settle layout before printing
       console.log('✅ Page content set');
       
       // Generate PDF
