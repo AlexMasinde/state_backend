@@ -178,21 +178,48 @@ export class ParticipantsService {
       return [];
     }
 
-    const query = this.participantRepository
+    const normalizedIdNumber = String(searchTerm).trim();
+
+    // Only search by ID number (exact match)
+    const participant = await this.participantRepository.findOne({
+      where: { 
+        event: { eventId },
+        idNumber: normalizedIdNumber 
+      },
+      relations: ['event', 'checkedInBy'],
+    });
+
+    // Return array with single participant if found, empty array if not
+    return participant ? [participant] : [];
+  }
+
+  async searchByPhone(eventId: string, phoneNumber: string): Promise<Participant[]> {
+    if (!phoneNumber || phoneNumber.trim().length === 0) {
+      return [];
+    }
+
+    // Normalize phone number: remove leading zeros
+    let normalizedPhone = String(phoneNumber).trim();
+    normalizedPhone = normalizedPhone.replace(/^0+/, '');
+
+    // Search by normalized phone number (exact match)
+    // Also try with leading zero in case the stored number has it
+    const participant = await this.participantRepository
       .createQueryBuilder('participant')
       .leftJoinAndSelect('participant.event', 'event')
       .leftJoinAndSelect('participant.checkedInBy', 'checkedInBy')
       .where('participant.event.eventId = :eventId', { eventId })
       .andWhere(
-        '(LOWER(participant.name) LIKE LOWER(:searchTerm) OR ' +
-        'LOWER(participant.idNumber) LIKE LOWER(:searchTerm) OR ' +
-        'LOWER(participant.phoneNumber) LIKE LOWER(:searchTerm))',
-        { searchTerm: `%${searchTerm.trim()}%` }
+        '(participant.phoneNumber = :normalizedPhone OR participant.phoneNumber = :withLeadingZero)',
+        { 
+          normalizedPhone,
+          withLeadingZero: `0${normalizedPhone}`
+        }
       )
-      .orderBy('participant.name', 'ASC')
-      .limit(50); // Limit results for performance
+      .getOne();
 
-    return query.getMany();
+    // Return array with single participant if found, empty array if not
+    return participant ? [participant] : [];
   }
 
   async getStats(eventId: string): Promise<{

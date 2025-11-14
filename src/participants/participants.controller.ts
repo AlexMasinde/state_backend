@@ -48,6 +48,11 @@ export class ParticipantsController {
     return this.participantsService.findAll(eventId);
   }
 
+  @Get('event/:eventId/search/phone')
+  searchByPhone(@Param('eventId') eventId: string, @Query('q') phoneNumber: string) {
+    return this.participantsService.searchByPhone(eventId, phoneNumber);
+  }
+
   @Get('event/:eventId/search')
   search(@Param('eventId') eventId: string, @Query('q') searchTerm: string) {
     return this.participantsService.search(eventId, searchTerm);
