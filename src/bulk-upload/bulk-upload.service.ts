@@ -279,7 +279,7 @@ export class BulkUploadService {
 
       // Create participant DTO with enriched data
       const dto: CreateParticipantDto = {
-        name: voterData && voterData.isRegisteredVoter ? (voterData.fullName || name) : name,
+        name: name, // Always use the submitted name (from the uploaded file)
         idNumber: normalizedIdNumber,
         phoneNumber,
         group,

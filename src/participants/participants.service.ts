@@ -257,7 +257,7 @@ export class ParticipantsService {
     if (voterData && voterData.isRegisteredVoter) {
       // Person found in voter register - use voter data
       return {
-        name: voterData.fullName || dto.name, // Use voter name if available
+        name: dto.name, // Always use the submitted name
         idNumber: normalizedIdNumber,
         phoneNumber: dto.phoneNumber,
         group: dto.group,

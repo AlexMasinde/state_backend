@@ -4,16 +4,16 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { env } from '../config/env.config';
 
-
 @Injectable()
 export class PdfService {
   private async getLogoDataUrl(): Promise<string | null> {
     try {
       // Fetch PNG logo from DigitalOcean Spaces
-      const logoUrl = 'https://mobilizers-bulk-uploads.nyc3.digitaloceanspaces.com/cof.png';
-      
+      const logoUrl =
+        'https://mobilizers-bulk-uploads.nyc3.digitaloceanspaces.com/cof.png';
+
       console.log('🔍 Fetching logo from:', logoUrl);
-      
+
       const response = await fetch(logoUrl);
       if (response.ok) {
         const buffer = await response.arrayBuffer();
@@ -26,75 +26,90 @@ export class PdfService {
     } catch (error) {
       console.warn('❌ Could not load logo:', error.message);
     }
-    
+
     // Fallback to text-based logo
     console.log('📝 Using text-based logo fallback');
     return null;
   }
 
-  async generateEventReport(eventData: any, participants: any[]): Promise<Buffer> {
+  async generateEventReport(
+    eventData: any,
+    participants: any[],
+  ): Promise<Buffer> {
     console.log('🤖 Starting PDF generation with Puppeteer...');
-    console.log(`📊 Event data:`, { eventName: eventData?.eventName, eventDate: eventData?.eventDate });
+    console.log(`📊 Event data:`, {
+      eventName: eventData?.eventName,
+      eventDate: eventData?.eventDate,
+    });
     console.log(`👥 Participants count: ${participants?.length || 0}`);
-    
+
     // Use PUPPETEER_EXECUTABLE_PATH if explicitly set, otherwise determine based on environment
     const isProd = env.NODE_ENV === 'production';
-    const executablePath = env.PUPPETEER_EXECUTABLE_PATH 
-      ? env.PUPPETEER_EXECUTABLE_PATH 
-      : (isProd ? '/usr/bin/chromium' : undefined);
-    
+    const executablePath = env.PUPPETEER_EXECUTABLE_PATH
+      ? env.PUPPETEER_EXECUTABLE_PATH
+      : isProd
+        ? '/usr/bin/chromium'
+        : undefined;
+
     console.log(`🌍 Environment: ${isProd ? 'Production' : 'Development'}`);
     if (executablePath) {
       console.log(`📍 Using Chrome at: ${executablePath}`);
     } else {
-      console.log('📍 Using default Puppeteer Chromium (will use bundled or system Chrome)');
+      console.log(
+        '📍 Using default Puppeteer Chromium (will use bundled or system Chrome)',
+      );
     }
-    
+
     let browser;
     try {
       console.log('🚀 Launching Puppeteer browser...');
-      
+
       const launchOptions: any = {
         headless: true,
         args: isProd
           ? [
-              '--no-sandbox', 
+              '--no-sandbox',
               '--disable-setuid-sandbox',
               '--disable-dev-shm-usage',
               '--disable-gpu',
-              '--single-process'
+              '--single-process',
             ]
           : [],
       };
-      
+
       // Only set executablePath if it's defined (don't pass undefined)
       if (executablePath) {
         launchOptions.executablePath = executablePath;
       }
-      
+
       browser = await puppeteer.launch(launchOptions);
       console.log('✅ Browser launched successfully');
 
       console.log('📄 Creating new page...');
       const page = await browser.newPage();
-      page.setDefaultTimeout(120000); // allow Chromium enough time to render huge tables
-      page.setDefaultNavigationTimeout(120000);
+      page.setDefaultTimeout(240000); // allow Chromium enough time to render huge tables
+      page.setDefaultNavigationTimeout(240000);
       console.log('✅ Page created');
-      
+
       // Generate HTML content
       console.log('🎨 Generating HTML content...');
-      const htmlContent = await this.generateHtmlContent(eventData, participants);
-      console.log(`✅ HTML content generated (length: ${htmlContent.length} chars)`);
-      
+      const htmlContent = await this.generateHtmlContent(
+        eventData,
+        participants,
+      );
+      console.log(
+        `✅ HTML content generated (length: ${htmlContent.length} chars)`,
+      );
+
       console.log('📥 Setting page content...');
-      await page.setContent(htmlContent, { 
+      await page.setContent(htmlContent, {
         waitUntil: 'domcontentloaded',
         timeout: 0, // DOMContentLoaded can easily take >30s with 1000s of rows
       });
       // Small delay to ensure layout is settled (using Promise instead of deprecated waitForTimeout)
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
       console.log('✅ Page content set');
-      
+
       // Generate PDF
       console.log('📄 Generating PDF from page...');
       const pdfBuffer = await page.pdf({
@@ -104,10 +119,12 @@ export class PdfService {
           top: '20mm',
           right: '15mm',
           bottom: '20mm',
-          left: '15mm'
-        }
+          left: '15mm',
+        },
       });
-      console.log(`✅ PDF generated successfully (size: ${pdfBuffer.length} bytes)`);
+      console.log(
+        `✅ PDF generated successfully (size: ${pdfBuffer.length} bytes)`,
+      );
 
       return Buffer.from(pdfBuffer);
     } catch (error) {
@@ -123,16 +140,24 @@ export class PdfService {
     }
   }
 
-  private async generateHtmlContent(eventData: any, participants: any[]): Promise<string> {
+  private async generateHtmlContent(
+    eventData: any,
+    participants: any[],
+  ): Promise<string> {
     console.log('🎨 Starting HTML content generation...');
-    
-    const checkedInParticipants = participants.filter(p => p.checkedIn);
+
+    const checkedInParticipants = participants.filter((p) => p.checkedIn);
     const totalParticipants = participants.length;
     const checkedInCount = checkedInParticipants.length;
     const notCheckedInCount = totalParticipants - checkedInCount;
-    const checkInRate = totalParticipants > 0 ? Math.round((checkedInCount / totalParticipants) * 100) : 0;
+    const checkInRate =
+      totalParticipants > 0
+        ? Math.round((checkedInCount / totalParticipants) * 100)
+        : 0;
 
-    console.log(`📊 Stats: Total: ${totalParticipants}, Checked In: ${checkedInCount}, Rate: ${checkInRate}%`);
+    console.log(
+      `📊 Stats: Total: ${totalParticipants}, Checked In: ${checkedInCount}, Rate: ${checkInRate}%`,
+    );
 
     // Get logo data URL
     const logoDataUrl = await this.getLogoDataUrl();
@@ -150,13 +175,23 @@ export class PdfService {
       return acc;
     }, {});
 
-    const groupStatsArray = Object.keys(groupStats).map(groupName => ({
-      groupName,
-      total: groupStats[groupName].total,
-      checkedIn: groupStats[groupName].checkedIn,
-      notCheckedIn: groupStats[groupName].total - groupStats[groupName].checkedIn,
-      checkInRate: groupStats[groupName].total > 0 ? Math.round((groupStats[groupName].checkedIn / groupStats[groupName].total) * 100) : 0,
-    })).sort((a, b) => b.total - a.total);
+    const groupStatsArray = Object.keys(groupStats)
+      .map((groupName) => ({
+        groupName,
+        total: groupStats[groupName].total,
+        checkedIn: groupStats[groupName].checkedIn,
+        notCheckedIn:
+          groupStats[groupName].total - groupStats[groupName].checkedIn,
+        checkInRate:
+          groupStats[groupName].total > 0
+            ? Math.round(
+                (groupStats[groupName].checkedIn /
+                  groupStats[groupName].total) *
+                  100,
+              )
+            : 0,
+      }))
+      .sort((a, b) => b.total - a.total);
 
     // Origin statistics
     const originStats = participants.reduce((acc: any, participant: any) => {
@@ -171,13 +206,23 @@ export class PdfService {
       return acc;
     }, {});
 
-    const originStatsArray = Object.keys(originStats).map(originName => ({
-      originName,
-      total: originStats[originName].total,
-      checkedIn: originStats[originName].checkedIn,
-      notCheckedIn: originStats[originName].total - originStats[originName].checkedIn,
-      checkInRate: originStats[originName].total > 0 ? Math.round((originStats[originName].checkedIn / originStats[originName].total) * 100) : 0,
-    })).sort((a, b) => b.total - a.total);
+    const originStatsArray = Object.keys(originStats)
+      .map((originName) => ({
+        originName,
+        total: originStats[originName].total,
+        checkedIn: originStats[originName].checkedIn,
+        notCheckedIn:
+          originStats[originName].total - originStats[originName].checkedIn,
+        checkInRate:
+          originStats[originName].total > 0
+            ? Math.round(
+                (originStats[originName].checkedIn /
+                  originStats[originName].total) *
+                  100,
+              )
+            : 0,
+      }))
+      .sort((a, b) => b.total - a.total);
 
     return `
 <!DOCTYPE html>
@@ -393,19 +438,20 @@ export class PdfService {
 <body>
     <div class="header">
         <div class="logo-section">
-            ${logoDataUrl ? 
-                `<img src="${logoDataUrl}" alt="COF Logo" class="logo-img" />` : 
-                `<div class="logo">COF</div>`
+            ${
+              logoDataUrl
+                ? `<img src="${logoDataUrl}" alt="COF Logo" class="logo-img" />`
+                : `<div class="logo">COF</div>`
             }
         </div>
         <div class="company-info">
             <strong>Statehouse Event Management System</strong><br>
             Nairobi, Kenya<br>
-            Report Generated: ${new Date().toLocaleDateString('en-US', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
+            Report Generated: ${new Date().toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
             })} at ${new Date().toLocaleTimeString()}
         </div>
     </div>
@@ -416,11 +462,13 @@ export class PdfService {
         <h3>EVENT INFORMATION</h3>
         <div class="event-details">
             <div><strong>Event Name:</strong> ${eventData.eventName || 'Unknown Event'}</div>
-            <div><strong>Event Date:</strong> ${new Date(eventData.eventDate || new Date()).toLocaleDateString('en-US', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
+            <div><strong>Event Date:</strong> ${new Date(
+              eventData.eventDate || new Date(),
+            ).toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
             })}</div>
             <div><strong>Location:</strong> ${eventData.location || 'Unknown Location'}</div>
             <div><strong>Total Participants:</strong> ${totalParticipants}</div>
@@ -458,7 +506,9 @@ export class PdfService {
             </tr>
         </thead>
         <tbody>
-            ${groupStatsArray.map(group => `
+            ${groupStatsArray
+              .map(
+                (group) => `
                 <tr>
                     <td style="text-align: left;">${group.groupName}</td>
                     <td>${group.total}</td>
@@ -466,7 +516,9 @@ export class PdfService {
                     <td>${group.notCheckedIn}</td>
                     <td>${group.checkInRate}%</td>
                 </tr>
-            `).join('')}
+            `,
+              )
+              .join('')}
         </tbody>
     </table>
 
@@ -482,7 +534,9 @@ export class PdfService {
             </tr>
         </thead>
         <tbody>
-            ${originStatsArray.map(origin => `
+            ${originStatsArray
+              .map(
+                (origin) => `
                 <tr>
                     <td style="text-align: left;">${origin.originName}</td>
                     <td>${origin.total}</td>
@@ -490,14 +544,17 @@ export class PdfService {
                     <td>${origin.notCheckedIn}</td>
                     <td>${origin.checkInRate}%</td>
                 </tr>
-            `).join('')}
+            `,
+              )
+              .join('')}
         </tbody>
     </table>
 
     <div class="section-header">CHECKED-IN PARTICIPANTS</div>
-    ${checkedInParticipants.length === 0 ? 
-        '<p style="text-align: center; color: #666; font-style: italic; margin: 20px 0;">No participants have checked in yet.</p>' :
-        `<table class="participants-table">
+    ${
+      checkedInParticipants.length === 0
+        ? '<p style="text-align: center; color: #666; font-style: italic; margin: 20px 0;">No participants have checked in yet.</p>'
+        : `<table class="participants-table">
             <thead>
                 <tr>
                     <th style="width: 4%;">#</th>
@@ -510,7 +567,9 @@ export class PdfService {
                 </tr>
             </thead>
             <tbody>
-                ${checkedInParticipants.map((participant, index) => `
+                ${checkedInParticipants
+                  .map(
+                    (participant, index) => `
                     <tr>
                         <td style="text-align: center;">${index + 1}</td>
                         <td>${participant.name || 'N/A'}</td>
@@ -518,21 +577,23 @@ export class PdfService {
                         <td>${participant.phoneNumber || 'N/A'}</td>
                         <td>${participant.group || 'N/A'}</td>
                         <td>${participant.origin || 'N/A'}</td>
-                        <td style="text-align: center;">${participant.checkedInBy ? (participant.checkedInBy.name || 'Unknown') : 'N/A'}</td>
+                        <td style="text-align: center;">${participant.checkedInBy ? participant.checkedInBy.name || 'Unknown' : 'N/A'}</td>
                     </tr>
-                `).join('')}
+                `,
+                  )
+                  .join('')}
             </tbody>
         </table>`
     }
 
     <div class="footer">
-        <p>Report generated on ${new Date().toLocaleDateString('en-US', { 
-          weekday: 'long', 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric', 
-          hour: '2-digit', 
-          minute: '2-digit' 
+        <p>Report generated on ${new Date().toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
         })}</p>
         <p>Statehouse Event Management System</p>
     </div>
