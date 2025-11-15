@@ -1274,10 +1274,10 @@ export class PdfService {
                         data: genderData.map(item => item.value),
                         backgroundColor: [
                             '#2B9A8B',
-                            '#008469',
-                            '#237A6F',
-                            '#1E6B61',
-                            '#155A52'
+                            '#F97316',
+                            '#7C3AED',
+                            '#3B82F6',
+                            '#F59E0B'
                         ],
                         borderWidth: 3,
                         borderColor: '#ffffff',
@@ -1382,7 +1382,7 @@ export class PdfService {
                         data: voterData.map(item => item.value),
                         backgroundColor: [
                             '#2B9A8B',
-                            '#008469'
+                            '#F97316'
                         ],
                         borderWidth: 3,
                         borderColor: '#ffffff',
