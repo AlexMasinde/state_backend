@@ -11,9 +11,9 @@ export class PdfService {
       // Fetch PNG logo from DigitalOcean Spaces
       const logoUrl =
         'https://mobilizers-bulk-uploads.nyc3.digitaloceanspaces.com/cof.png';
-
+      
       console.log('🔍 Fetching logo from:', logoUrl);
-
+      
       const response = await fetch(logoUrl);
       if (response.ok) {
         const buffer = await response.arrayBuffer();
@@ -26,10 +26,38 @@ export class PdfService {
     } catch (error) {
       console.warn('❌ Could not load logo:', error.message);
     }
-
+    
     // Fallback to text-based logo
     console.log('📝 Using text-based logo fallback');
     return null;
+  }
+
+  private async launchBrowser(isProd: boolean, executablePath?: string) {
+    const browserlessUrl = 'wss://production-sfo.browserless.io?token=2TWhMjjwY2OITnpf9f3886140c278370a3319ac18cb3aa3df';
+    try {
+      console.log('🚀 Connecting to Browserless...');
+      return await puppeteer.connect({ browserWSEndpoint: browserlessUrl });
+    } catch (error) {
+      console.warn('⚠️ Browserless connection failed, falling back to local Puppeteer:', error.message);
+      
+      const launchOptions: any = {
+        headless: true,
+        args: isProd
+          ? [
+              '--no-sandbox', 
+              '--disable-setuid-sandbox',
+              '--disable-dev-shm-usage',
+              '--disable-gpu',
+              '--single-process',
+            ]
+          : [],
+      };
+
+      if (executablePath) {
+        launchOptions.executablePath = executablePath;
+      }
+      return await puppeteer.launch(launchOptions);
+    }
   }
 
   async generateEventReport(
@@ -42,7 +70,7 @@ export class PdfService {
       eventDate: eventData?.eventDate,
     });
     console.log(`👥 Participants count: ${participants?.length || 0}`);
-
+    
     // Use PUPPETEER_EXECUTABLE_PATH if explicitly set, otherwise determine based on environment
     const isProd = env.NODE_ENV === 'production';
     const executablePath = env.PUPPETEER_EXECUTABLE_PATH
@@ -50,7 +78,7 @@ export class PdfService {
       : isProd
         ? '/usr/bin/chromium'
         : undefined;
-
+    
     console.log(`🌍 Environment: ${isProd ? 'Production' : 'Development'}`);
     if (executablePath) {
       console.log(`📍 Using Chrome at: ${executablePath}`);
@@ -59,30 +87,12 @@ export class PdfService {
         '📍 Using default Puppeteer Chromium (will use bundled or system Chrome)',
       );
     }
-
+    
     let browser;
     try {
       console.log('🚀 Launching Puppeteer browser...');
 
-      const launchOptions: any = {
-        headless: true,
-        args: isProd
-          ? [
-              '--no-sandbox',
-              '--disable-setuid-sandbox',
-              '--disable-dev-shm-usage',
-              '--disable-gpu',
-              '--single-process',
-            ]
-          : [],
-      };
-
-      // Only set executablePath if it's defined (don't pass undefined)
-      if (executablePath) {
-        launchOptions.executablePath = executablePath;
-      }
-
-      browser = await puppeteer.launch(launchOptions);
+      browser = await this.launchBrowser(isProd, executablePath);
       console.log('✅ Browser launched successfully');
 
       console.log('📄 Creating new page...');
@@ -90,7 +100,7 @@ export class PdfService {
       page.setDefaultTimeout(240000); // allow Chromium enough time to render huge tables
       page.setDefaultNavigationTimeout(240000);
       console.log('✅ Page created');
-
+      
       // Generate HTML content
       console.log('🎨 Generating HTML content...');
       const htmlContent = await this.generateHtmlContent(
@@ -100,7 +110,7 @@ export class PdfService {
       console.log(
         `✅ HTML content generated (length: ${htmlContent.length} chars)`,
       );
-
+      
       console.log('📥 Setting page content...');
       await page.setContent(htmlContent, {
         waitUntil: 'domcontentloaded',
@@ -109,7 +119,7 @@ export class PdfService {
       // Small delay to ensure layout is settled (using Promise instead of deprecated waitForTimeout)
       await new Promise((resolve) => setTimeout(resolve, 500));
       console.log('✅ Page content set');
-
+      
       // Generate PDF
       console.log('📄 Generating PDF from page...');
       const pdfBuffer = await page.pdf({
@@ -145,7 +155,7 @@ export class PdfService {
     participants: any[],
   ): Promise<string> {
     console.log('🎨 Starting HTML content generation...');
-
+    
     const checkedInParticipants = participants.filter((p) => p.checkedIn);
     const totalParticipants = participants.length;
     const checkedInCount = checkedInParticipants.length;
@@ -177,9 +187,9 @@ export class PdfService {
 
     const groupStatsArray = Object.keys(groupStats)
       .map((groupName) => ({
-        groupName,
-        total: groupStats[groupName].total,
-        checkedIn: groupStats[groupName].checkedIn,
+      groupName,
+      total: groupStats[groupName].total,
+      checkedIn: groupStats[groupName].checkedIn,
         notCheckedIn:
           groupStats[groupName].total - groupStats[groupName].checkedIn,
         checkInRate:
@@ -208,9 +218,9 @@ export class PdfService {
 
     const originStatsArray = Object.keys(originStats)
       .map((originName) => ({
-        originName,
-        total: originStats[originName].total,
-        checkedIn: originStats[originName].checkedIn,
+      originName,
+      total: originStats[originName].total,
+      checkedIn: originStats[originName].checkedIn,
         notCheckedIn:
           originStats[originName].total - originStats[originName].checkedIn,
         checkInRate:
@@ -446,10 +456,10 @@ export class PdfService {
         <div class="company-info">
             <strong>Statehouse Event Management System</strong><br>
             Nairobi, Kenya<br>
-            Report Generated: ${new Date().toLocaleDateString('en-US', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
+            Report Generated: ${new Date().toLocaleDateString('en-US', { 
+              weekday: 'long', 
+              year: 'numeric', 
+              month: 'long', 
               day: 'numeric',
             })} at ${new Date().toLocaleTimeString()}
         </div>
@@ -464,9 +474,9 @@ export class PdfService {
             <div><strong>Event Date:</strong> ${new Date(
               eventData.eventDate || new Date(),
             ).toLocaleDateString('en-US', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
+              weekday: 'long', 
+              year: 'numeric', 
+              month: 'long', 
               day: 'numeric',
             })}</div>
             <div><strong>Location:</strong> ${eventData.location || 'Unknown Location'}</div>
@@ -586,12 +596,12 @@ export class PdfService {
     }
 
     <div class="footer">
-        <p>Report generated on ${new Date().toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-          hour: '2-digit',
+        <p>Report generated on ${new Date().toLocaleDateString('en-US', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric', 
+          hour: '2-digit', 
           minute: '2-digit',
         })}</p>
         <p>Statehouse Event Management System</p>
@@ -648,24 +658,7 @@ export class PdfService {
     try {
       console.log('🚀 Launching Puppeteer browser...');
       
-      const launchOptions: any = {
-        headless: true,
-        args: isProd
-          ? [
-              '--no-sandbox', 
-              '--disable-setuid-sandbox',
-              '--disable-dev-shm-usage',
-              '--disable-gpu',
-              '--single-process'
-            ]
-          : [],
-      };
-      
-      if (executablePath) {
-        launchOptions.executablePath = executablePath;
-      }
-      
-      browser = await puppeteer.launch(launchOptions);
+      browser = await this.launchBrowser(isProd, executablePath);
       console.log('✅ Browser launched successfully');
 
       console.log('📄 Creating new page...');
