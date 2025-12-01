@@ -43,6 +43,11 @@ export class ParticipantsController {
     return this.participantsService.findAllParticipants();
   }
 
+  @Get('stats')
+  getGlobalStats() {
+    return this.participantsService.getGlobalStats();
+  }
+
   @Get('event/:eventId')
   findAll(@Param('eventId') eventId: string) {
     return this.participantsService.findAll(eventId);

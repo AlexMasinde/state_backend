@@ -247,6 +247,29 @@ export class ParticipantsService {
     };
   }
 
+  async getGlobalStats(): Promise<{
+    total: number;
+    checkedIn: number;
+    notCheckedIn: number;
+    checkInRate: number;
+  }> {
+    const total = await this.participantRepository.count();
+
+    const checkedIn = await this.participantRepository.count({
+      where: { checkedIn: true },
+    });
+
+    const notCheckedIn = total - checkedIn;
+    const checkInRate = total > 0 ? Math.round((checkedIn / total) * 100) : 0;
+
+    return {
+      total,
+      checkedIn,
+      notCheckedIn,
+      checkInRate,
+    };
+  }
+
   // Helper method to enrich participant data with voter information
   private async enrichWithVoterData(dto: CreateParticipantDto): Promise<any> {
     const normalizedIdNumber = String(dto.idNumber).trim();
