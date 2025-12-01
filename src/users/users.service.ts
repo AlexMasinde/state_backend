@@ -19,7 +19,7 @@ export class UsersService {
   ) {}
 
   async findByEmail(email: string) {
-    return this.repo.findOne({ where: { email } });
+    return this.repo.findOne({ where: { email, isActive: true } });
   }
 
   async findById(id: string) {
@@ -49,7 +49,7 @@ export class UsersService {
 
   async findAll() {
     return this.repo.find({
-      select: ['id', 'email', 'name', 'role', 'createdAt', 'updatedAt'], // Don't return password
+      select: ['id', 'email', 'name', 'role', 'isActive', 'createdAt', 'updatedAt'], // Don't return password
     });
   }
 
@@ -81,6 +81,7 @@ export class UsersService {
       name: dto.name,
       passwordHash,
       role: 'user', // New users default to 'user' role
+      isActive: true,
     });
     
     const saved = await this.repo.save(user);
@@ -141,7 +142,28 @@ export class UsersService {
   async delete(id: string) {
     const user = await this.findById(id);
     if (!user) throw new NotFoundException('User not found');
-    await this.repo.remove(user);
-    return { message: 'User deleted successfully' };
+
+    if (!user.isActive) {
+      throw new ConflictException('User is already deactivated');
+    }
+
+    user.isActive = false;
+    await this.repo.save(user);
+
+    return { message: 'User deactivated successfully' };
+  }
+
+  async reactivate(id: string) {
+    const user = await this.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+
+    if (user.isActive) {
+      throw new ConflictException('User is already active');
+    }
+
+    user.isActive = true;
+    await this.repo.save(user);
+
+    return { message: 'User reactivated successfully' };
   }
 }

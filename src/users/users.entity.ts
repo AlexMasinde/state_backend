@@ -25,6 +25,9 @@ export class User {
   @Column({ type: 'varchar', length: 50, default: 'user' })
   role: string;
 
+  @Column({ type: 'boolean', default: true })
+  isActive: boolean;
+
   @Column({ type: 'varchar', length: 255, nullable: true })
   refreshTokenHash: string | null;
 

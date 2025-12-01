@@ -42,6 +42,12 @@ export class UsersController {
     return this.usersService.update(id, dto);
   }
 
+  @Patch(':id/reactivate')
+  @UseGuards(AdminGuard) // Only admins can reactivate users
+  async reactivateUser(@Param('id') id: string) {
+    return this.usersService.reactivate(id);
+  }
+
   @Delete(':id')
   @UseGuards(AdminGuard) // Only admins can delete users
   @HttpCode(HttpStatus.NO_CONTENT)
