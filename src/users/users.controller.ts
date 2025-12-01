@@ -43,6 +43,7 @@ export class UsersController {
   }
 
   @Delete(':id')
+  @UseGuards(AdminGuard) // Only admins can delete users
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteUser(@Param('id') id: string) {
     return this.usersService.delete(id);
