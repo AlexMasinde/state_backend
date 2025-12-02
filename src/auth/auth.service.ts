@@ -215,7 +215,7 @@ export class AuthService {
       
       const atSecret = env.JWT_AT_SECRET;
       const rtSecret = env.JWT_RT_SECRET;
-      const atExpires = '15m';
+      const atExpires = '1d';
       const rtExpires = '7d';
 
       logger.log(`🔐 JWT secrets status: AT=${!!atSecret}, RT=${!!rtSecret}`);
