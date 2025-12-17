@@ -2,6 +2,7 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -13,6 +14,8 @@ import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User) private repo: Repository<User>,
     private emailService: EmailService,
@@ -67,10 +70,16 @@ export class UsersService {
   }
 
   async createUser(dto: CreateUserDto) {
+    this.logger.log(`🛠️ Starting createUser for email: ${dto.email}`);
+    
     const existing = await this.findByEmail(dto.email);
-    if (existing) throw new ConflictException('Email already in use');
+    if (existing) {
+      this.logger.warn(`⚠️ Email already in use: ${dto.email}`);
+      throw new ConflictException('Email already in use');
+    }
     
     // Generate secure random password
+    this.logger.log('🔐 Generating secure password...');
     const generatedPassword = this.generateSecurePassword();
     const passwordHash = await argon2.hash(generatedPassword, {
       type: argon2.argon2id,
@@ -84,17 +93,28 @@ export class UsersService {
       isActive: true,
     });
     
-    const saved = await this.repo.save(user);
+    this.logger.log('💾 Saving user to database...');
+    let saved;
+    try {
+      saved = await this.repo.save(user);
+      this.logger.log(`✅ User saved to DB with ID: ${saved.id}`);
+    } catch (dbError) {
+      this.logger.error('💥 Database save failed:', dbError);
+      throw dbError;
+    }
     
     // Send credentials via email
+    this.logger.log('📧 Attempting to send credentials email...');
     try {
       await this.emailService.sendUserCredentials(
         dto.email,
         dto.name,
         generatedPassword
       );
+      this.logger.log('✅ Credentials email sent successfully');
     } catch (error) {
       // Log error but don't fail user creation if email fails
+      this.logger.error('⚠️ Failed to send email credentials:', error);
       console.error('Failed to send email:', error);
     }
     
