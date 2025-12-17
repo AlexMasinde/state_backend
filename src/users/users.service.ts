@@ -2,7 +2,6 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
-  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -14,8 +13,6 @@ import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class UsersService {
-  private readonly logger = new Logger(UsersService.name);
-
   constructor(
     @InjectRepository(User) private repo: Repository<User>,
     private emailService: EmailService,
@@ -70,69 +67,49 @@ export class UsersService {
   }
 
   async createUser(dto: CreateUserDto) {
-    const logPrefix = `[UsersService] [${new Date().toISOString()}]`;
-    console.log(`${logPrefix} 🛠️ ENTERING createUser for email: ${dto.email}`);
+    // Check for ANY existing user with this email (including inactive ones) through direct repo access
+    const existing = await this.repo.findOne({ where: { email: dto.email } });
     
-    try {
-      console.log(`${logPrefix} 🔍 Check for existing user...`);
-      const existing = await this.findByEmail(dto.email);
-      if (existing) {
-        console.warn(`${logPrefix} ⚠️ Email already in use: ${dto.email}`);
-        throw new ConflictException('Email already in use');
-      }
-      
-      // Generate secure random password
-      console.log(`${logPrefix} 🔐 Generating secure password...`);
-      const generatedPassword = this.generateSecurePassword();
-      console.log(`${logPrefix} 🔐 Hashing password with argon2...`);
-      
-      const passwordHash = await argon2.hash(generatedPassword, {
-        type: argon2.argon2id,
-      });
-      console.log(`${logPrefix} ✅ Password hashed.`);
-      
-      const user = this.repo.create({
-        email: dto.email.toLowerCase(),
-        name: dto.name,
-        passwordHash,
-        role: 'user', // New users default to 'user' role
-        isActive: true,
-      });
-      
-      console.log(`${logPrefix} 💾 Saving user to database...`);
-      const saved = await this.repo.save(user);
-      console.log(`${logPrefix} ✅ User saved to DB with ID: ${saved.id}`);
-      
-      // Send credentials via email
-      console.log(`${logPrefix} 📧 Attempting to send credentials email...`);
-      if (!this.emailService) {
-         console.error(`${logPrefix} ⚠️ WARNING: this.emailService is UNDEFINED`);
-      }
-
-      try {
-        await this.emailService.sendUserCredentials(
-          dto.email,
-          dto.name,
-          generatedPassword
-        );
-        console.log(`${logPrefix} ✅ Credentials email sent successfully`);
-      } catch (error) {
-        // Log error but don't fail user creation if email fails
-        console.error(`${logPrefix} ⚠️ Failed to send email credentials:`, error);
-      }
-      
-      return {
-        id: saved.id,
-        email: saved.email,
-        name: saved.name,
-        role: saved.role,
-        createdAt: saved.createdAt,
-      };
-
-    } catch (err) {
-       console.error(`${logPrefix} 💥 UNCAUGHT ERROR in createUser service:`, err);
-       throw err; 
+    if (existing) {
+      throw new ConflictException('Email already in use');
     }
+    
+    // Generate secure random password
+    const generatedPassword = this.generateSecurePassword();
+    const passwordHash = await argon2.hash(generatedPassword, {
+      type: argon2.argon2id,
+    });
+    
+    const user = this.repo.create({
+      email: dto.email.toLowerCase(),
+      name: dto.name,
+      passwordHash,
+      role: 'user', // New users default to 'user' role
+      isActive: true,
+    });
+    
+    const saved = await this.repo.save(user);
+    
+    // Send credentials via email
+    try {
+      await this.emailService.sendUserCredentials(
+        dto.email,
+        dto.name,
+        generatedPassword
+      );
+    } catch (error) {
+      // Log error but don't fail user creation if email fails
+      console.error('Failed to send email:', error);
+    }
+    
+    // Return without password hash
+    return {
+      id: saved.id,
+      email: saved.email,
+      name: saved.name,
+      role: saved.role,
+      createdAt: saved.createdAt,
+    };
   }
 
   async update(id: string, dto: UpdateUserDto) {
