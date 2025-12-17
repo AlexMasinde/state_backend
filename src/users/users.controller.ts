@@ -37,23 +37,30 @@ export class UsersController {
   @UseGuards(AdminGuard) // Only admins can create users
   @HttpCode(HttpStatus.CREATED)
   async createUser(@Body() dto: CreateUserDto) {
-    this.logger.log(`🚀 Admin creating user: ${dto.email}`);
-    process.stdout.write(`🚀 Admin creating user: ${dto.email}\n`);
+    // Aggressive logging using stdout ensuring no buffering/logger issues
+    const logPrefix = `[UsersController] [${new Date().toISOString()}]`;
+    console.log(`${logPrefix} 🚀 Admin creating user: ${dto.email}`);
     
     try {
+      console.log(`${logPrefix} 🔄 Calling this.usersService.createUser...`);
+      if (!this.usersService) {
+        console.error(`${logPrefix} 💥 CRITICAL: this.usersService is UNDEFINED`);
+        throw new Error('UsersService dependency is undefined');
+      }
+
+      console.log(`${logPrefix} 🧐 Type of usersService.createUser: ${typeof this.usersService.createUser}`);
+      
       const result = await this.usersService.createUser(dto);
       
-      this.logger.log(`✅ Admin created user successfully: ${dto.email}`);
-      process.stdout.write(`✅ Admin created user successfully: ${dto.email}\n`);
-      
+      console.log(`${logPrefix} ✅ Admin created user successfully: ${dto.email}`);
       return result;
     } catch (error) {
+      console.error(`${logPrefix} 💥 Failed to create user ${dto.email}:`, error);
+      console.error(`${logPrefix} 📊 Error stack:`, error.stack);
+      
+      // Fallback to Logger for consistency if needed
       this.logger.error(`💥 Failed to create user ${dto.email}:`, error);
-      this.logger.error('📊 Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-      });
+      
       throw error;
     }
   }
