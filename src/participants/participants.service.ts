@@ -36,6 +36,27 @@ export class ParticipantsService {
     const enrichedData = await this.enrichWithVoterData(dto);
     const now = new Date();
     
+    // Check if a participant with this idNumber already exists
+    const normalizedId = String(dto.idNumber).trim();
+    const existing = await this.participantRepository.findOne({
+      where: { idNumber: normalizedId },
+      relations: ['event', 'checkedInBy'],
+    });
+    
+    if (existing) {
+      // Update the existing participant with new data and reassign to the new event
+      Object.assign(existing, {
+        ...enrichedData,
+        event,
+        checkedIn: false,
+        checkedInBy: null,
+        checkedInAt: null,
+        updatedAt: now,
+      });
+      return this.participantRepository.save(existing);
+    }
+    
+    // Create a new participant
     const participant = new Participant();
     Object.assign(participant, {
       ...enrichedData,
