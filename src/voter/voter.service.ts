@@ -112,26 +112,85 @@ export class VoterService {
         this.logger.log('❌ Voter not found for ID:', normalizedIdNumber);
         return null;
       }
-
     } catch (error) {
       this.logger.error('💥 Voter lookup error:', {
         idNumber: normalizedIdNumber,
         error: error.message,
-        name: error.name,
-        code: error.code
       });
-      
-      // Handle different types of errors gracefully
-      if (error.name === 'AbortError') {
-        this.logger.warn('⏰ Request timeout for ID:', normalizedIdNumber);
-        return null; // Don't throw, just skip lookup
-      } else if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-        this.logger.error('🌐 Network error for ID:', normalizedIdNumber);
-        return null; // Don't throw, just skip lookup
-      } else {
-        this.logger.error('❓ Unknown error for ID:', normalizedIdNumber);
-        return null; // Don't throw, just skip lookup
-      }
+      return null;
     }
+  }
+
+  async checkBulkRegistration(idNumbers: string[]): Promise<Map<string, any>> {
+    if (!idNumbers || idNumbers.length === 0) return new Map();
+
+    try {
+      if (!this.frappeApiUrl || !this.apiKey || !this.apiSecret) {
+        return new Map();
+      }
+
+      // Fire both requests in parallel
+      const [voterRes, adultRes] = await Promise.all([
+        this.callFrappe('election_management.api.get_bulk_voter_information', { id_numbers: idNumbers }),
+        this.callFrappe('election_management.api.get_bulk_adult_population_information', { id_numbers: idNumbers })
+      ]);
+
+      const mergedData = new Map<string, any>();
+      const voterFound = voterRes?.message?.found || {};
+      const adultFound = adultRes?.message?.found || {};
+
+      // Combine all unique IDs found in either source
+      const allFoundIds = new Set([...Object.keys(voterFound), ...Object.keys(adultFound)]);
+
+      allFoundIds.forEach(id => {
+        const v = voterFound[id];
+        const a = adultFound[id];
+
+        mergedData.set(id, {
+          idNumber: id,
+          // Geography from Voter (Primary) or Adult (Fallback)
+          county: v?.county || a?.district || null,
+          constituency: v?.constituency || a?.division || null,
+          ward: v?.ward || a?.location || null,
+          pollingStation: v?.polling_center || null,
+          
+          // Identity & Culture
+          isRegisteredVoter: !!v,
+          gender: v?.sex || a?.sex || null,
+          dateOfBirth: v?.date_of_birth || a?.date_of_birth || null,
+          tribe: a?.tribe || null,
+          clan: a?.clan || null,
+          family: a?.family || null
+        });
+      });
+
+      this.logger.log(`📦 Bulk enrichment complete: ${mergedData.size}/${idNumbers.length} IDs enriched`);
+      return mergedData;
+
+    } catch (error) {
+      this.logger.error('💥 Bulk voter lookup error:', error.message);
+      return new Map();
+    }
+  }
+
+  private async callFrappe(method: string, body: any): Promise<any> {
+    const response = await fetch(
+      `${this.frappeApiUrl}/api/method/${method}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `token ${this.apiKey}:${this.apiSecret}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(60000), // 60 second timeout for bulk
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Frappe API error: ${response.status}`);
+    }
+
+    return response.json();
   }
 }

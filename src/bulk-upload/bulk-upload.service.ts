@@ -157,7 +157,7 @@ export class BulkUploadService {
     }
   }
 
-  // Process job with voter lookups (record-based)
+  // Process job with voter lookups (batched)
   private async processJobWithVoterLookups(job: BulkUploadJob) {
     const columnMapping = job.columnMapping ? JSON.parse(job.columnMapping) : null;
     
@@ -168,148 +168,81 @@ export class BulkUploadService {
         order: { rowIndex: 'ASC' }
       });
 
-      this.logger.log(`Processing ${pendingRecords.length} records for job ${job.id}`);
+      this.logger.log(`🚀 Processing ${pendingRecords.length} records for job ${job.id} in batches of 1000`);
 
-      let processedCount = 0;
-      const batchSize = 50; // Update progress every 50 records
-      const recordUpdates: Array<{ id: string; status: string; errorMessage?: string; processedAt?: Date }> = [];
-
-      // Process records one by one (streaming)
-      for (const record of pendingRecords) {
+      const batchSize = 1000;
+      for (let i = 0; i < pendingRecords.length; i += batchSize) {
+        const batch = pendingRecords.slice(i, i + batchSize);
+        
         try {
-          // Mark record as processing
-          recordUpdates.push({
-            id: record.id,
-            status: 'processing'
-          });
+          // 1. Prepare DTOs and IDs for this batch
+          const batchDtos: CreateParticipantDto[] = [];
+          const batchIds: string[] = [];
           
-          // Process individual record
-          await this.processIndividualRecord(record, job.eventId, columnMapping);
-          
-          // Mark record as completed
-          recordUpdates.push({
-            id: record.id,
-            status: 'completed',
-            processedAt: new Date()
-          });
-          
-          processedCount++;
-          
-          // Batch update progress every 50 records
-          if (processedCount % batchSize === 0) {
-            await this.batchUpdateRecordStatuses(recordUpdates);
-            await this.updateJobProgressFromRecords(job.id);
-            recordUpdates.length = 0; // Clear the array
-            this.logger.log(`Processed ${processedCount}/${pendingRecords.length} records for job ${job.id}`);
+          for (const record of batch) {
+            const idNumber = columnMapping ? 
+              record.recordData[columnMapping.idNumberColumn] : 
+              record.recordData.idNumber;
+            const normalizedId = String(idNumber).trim();
+            
+            const dto: CreateParticipantDto = {
+              name: columnMapping ? record.recordData[columnMapping.nameColumn] : record.recordData.name,
+              idNumber: normalizedId,
+              phoneNumber: columnMapping ? record.recordData[columnMapping.phoneNumberColumn] : record.recordData.phoneNumber,
+              group: columnMapping ? record.recordData[columnMapping.groupColumn] : record.recordData.group,
+              origin: columnMapping ? record.recordData[columnMapping.originColumn] : record.recordData.origin,
+              eventId: job.eventId
+            };
+            
+            batchDtos.push(dto);
+            batchIds.push(normalizedId);
+            
+            // Mark record as processing
+            await this.recordRepository.update(record.id, { status: 'processing' });
           }
           
-          // Small delay between records
-          await this.delay(200);
+          // 2. Fetch Enrichment Data in Bulk (Parallel Voter/Adult lookup)
+          const enrichmentData = await this.voterService.checkBulkRegistration(batchIds);
           
+          // 3. Create/Update Participants in Bulk
+          await this.participantsService.bulkCreateOrUpdate(batchDtos, enrichmentData);
+          
+          // 4. Update Records as Completed
+          for (const record of batch) {
+            const idNumber = columnMapping ? 
+              record.recordData[columnMapping.idNumberColumn] : 
+              record.recordData.idNumber;
+            const normalizedId = String(idNumber).trim();
+            const enrichment = enrichmentData.get(normalizedId);
+            
+            await this.recordRepository.update(record.id, { 
+              status: 'completed',
+              voterData: enrichment ? JSON.stringify(enrichment) : null,
+              processedAt: new Date()
+            });
+          }
+          
+          // 5. Update Job Progress
+          await this.updateJobProgressFromRecords(job.id);
+          this.logger.log(`✅ Batch ${Math.floor(i/batchSize) + 1} complete (${Math.min(i + batchSize, pendingRecords.length)}/${pendingRecords.length})`);
+
         } catch (error) {
-          this.logger.error(`Record ${record.id} failed:`, error);
-          recordUpdates.push({
-            id: record.id,
-            status: 'failed',
-            errorMessage: error.message,
-            processedAt: new Date()
-          });
-          
-          processedCount++;
-          
-          // Batch update on error too
-          if (processedCount % batchSize === 0) {
-            await this.batchUpdateRecordStatuses(recordUpdates);
-            await this.updateJobProgressFromRecords(job.id);
-            recordUpdates.length = 0;
+          this.logger.error(`❌ Batch starting at index ${i} failed:`, error);
+          // Mark batch as failed
+          for (const record of batch) {
+            await this.recordRepository.update(record.id, { 
+              status: 'failed',
+              errorMessage: error.message,
+              processedAt: new Date()
+            });
           }
         }
       }
-
-      // Update any remaining records
-      if (recordUpdates.length > 0) {
-        await this.batchUpdateRecordStatuses(recordUpdates);
-        await this.updateJobProgressFromRecords(job.id);
-      }
-      
       // Mark job as completed
       await this.updateJobStatus(job.id, 'completed');
       
     } catch (error) {
       this.logger.error(`Job ${job.id} processing failed:`, error);
-      throw error;
-    }
-  }
-
-  // Process individual record
-  private async processIndividualRecord(record: BulkUploadRecord, eventId: string, columnMapping?: any): Promise<void> {
-    try {
-      // Extract data based on column mapping or direct fields
-      const idNumber = columnMapping ? 
-        record.recordData[columnMapping.idNumberColumn] : 
-        record.recordData.idNumber;
-      
-      // Normalize ID number: ensure string and trim whitespace
-      const normalizedIdNumber = String(idNumber).trim();
-      
-      const name = columnMapping ? 
-        record.recordData[columnMapping.nameColumn] : 
-        record.recordData.name;
-      const phoneNumber = columnMapping ? 
-        record.recordData[columnMapping.phoneNumberColumn] : 
-        record.recordData.phoneNumber;
-      const group = columnMapping ? 
-        record.recordData[columnMapping.groupColumn] : 
-        record.recordData.group;
-      const origin = columnMapping ? 
-        record.recordData[columnMapping.originColumn] : 
-        record.recordData.origin;
-
-      if (!normalizedIdNumber || !name) {
-        throw new Error(`Missing required fields: ID=${normalizedIdNumber}, Name=${name}`);
-      }
-
-      // Perform voter lookup with normalized ID
-      const voterData = await this.voterService.checkVoterRegistration(normalizedIdNumber);
-      
-      // Store voter data in record
-      await this.recordRepository.update(record.id, {
-        voterData: JSON.stringify(voterData)
-      });
-
-      // Create participant DTO with enriched data
-      const dto: CreateParticipantDto = {
-        name: name, // Always use the submitted name (from the uploaded file)
-        idNumber: normalizedIdNumber,
-        phoneNumber,
-        group,
-        origin,
-        eventId,
-        // Voter data (if available)
-        county: voterData?.county || null,
-        constituency: voterData?.constituency || null,
-        ward: voterData?.ward || null,
-        pollingStation: voterData?.pollingStation || null,
-        registeredVoter: voterData?.isRegisteredVoter || false,
-        tribe: voterData?.tribe || null,
-        clan: voterData?.clan || null,
-        family: voterData?.family || null,
-        gender: voterData?.gender || null,
-        dateOfBirth: voterData?.dateOfBirth || null,
-      };
-
-      // Create participant
-      const createdParticipant = await this.participantsService.create(dto);
-      
-      // Update record with participant ID
-      await this.recordRepository.update(record.id, {
-        voterData: JSON.stringify(voterData)
-      });
-      
-      this.logger.debug(`✅ Created participant ${idNumber} (registered: ${voterData?.isRegisteredVoter || false})`);
-      
-    } catch (error) {
-      this.logger.error(`Failed to process record:`, error);
       throw error;
     }
   }

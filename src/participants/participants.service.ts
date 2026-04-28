@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Participant } from './participant.entity';
 import { CreateParticipantDto } from './dto/create-participant.dto';
 import { UpdateParticipantDto } from './dto/update-participant.dto';
@@ -224,20 +224,32 @@ export class ParticipantsService {
     }
     
     // 3. Name match fallback
-    const qb = this.participantRepository.createQueryBuilder('participant')
+    const tokens = query.split(/\s+/).filter(t => t.length > 0);
+    
+    // Pass 1: All tokens must match (most precise, e.g. "George Morara" matches "George Morara Masinde")
+    const andQb = this.participantRepository.createQueryBuilder('participant')
       .leftJoinAndSelect('participant.event', 'event')
       .leftJoinAndSelect('participant.checkedInBy', 'checkedInBy')
       .where('participant.event.eventId = :eventId', { eventId });
-      
-    // Pass 1: Multi-token match
-    const tokens = query.split(/\s+/).filter(t => t.length > 0);
     tokens.forEach((token, index) => {
-      qb.andWhere(`participant.name LIKE :token${index}`, { [`token${index}`]: `%${token}%` });
+      andQb.andWhere(`participant.name LIKE :andToken${index}`, { [`andToken${index}`]: `%${token}%` });
     });
+    let results = await andQb.getMany();
     
-    let results = await qb.getMany();
+    // Pass 2: Any token matches (broader, e.g. "George Masinde" finds "George Morara" via "George")
+    if (results.length === 0 && tokens.length > 1) {
+      const orQb = this.participantRepository.createQueryBuilder('participant')
+        .leftJoinAndSelect('participant.event', 'event')
+        .leftJoinAndSelect('participant.checkedInBy', 'checkedInBy')
+        .where('participant.event.eventId = :eventId', { eventId });
+      const orConditions = tokens.map((_, index) => `participant.name LIKE :orToken${index}`).join(' OR ');
+      const orParams: Record<string, string> = {};
+      tokens.forEach((token, index) => { orParams[`orToken${index}`] = `%${token}%`; });
+      orQb.andWhere(`(${orConditions})`, orParams);
+      results = await orQb.getMany();
+    }
     
-    // Pass 2: Phonetic fallback if no exact token matches
+    // Pass 3: Phonetic fallback (catches misspellings like "Njoroje" → "Njoroge")
     if (results.length === 0) {
       const phoneticQb = this.participantRepository.createQueryBuilder('participant')
         .leftJoinAndSelect('participant.event', 'event')
@@ -381,6 +393,68 @@ export class ParticipantsService {
         gender: null,
         dateOfBirth: null,
       };
+    }
+  }
+
+  async bulkCreateOrUpdate(dtos: CreateParticipantDto[], enrichmentData: Map<string, any>): Promise<void> {
+    if (dtos.length === 0) return;
+    
+    const eventId = dtos[0].eventId;
+    const event = await this.eventService.findOne(eventId);
+    if (!event) throw new NotFoundException('Event not found');
+
+    // 1. Deduplicate IDs within this batch and filter out invalid records
+    const uniqueDtosMap = new Map<string, CreateParticipantDto>();
+    for (const dto of dtos) {
+      const id = String(dto.idNumber || '').trim();
+      const name = String(dto.name || '').trim();
+      if (id && name) {
+        uniqueDtosMap.set(id, dto); // Latest occurrence in batch wins
+      }
+    }
+
+    const idNumbers = Array.from(uniqueDtosMap.keys());
+    if (idNumbers.length === 0) return;
+    
+    // 2. Find existing participants in bulk
+    const existingParticipants = await this.participantRepository.find({
+      where: { idNumber: In(idNumbers) },
+    });
+    
+    const existingMap = new Map(existingParticipants.map(p => [p.idNumber, p]));
+    const now = new Date();
+    const toSave: Participant[] = [];
+    
+    // 3. Prepare entities for saving
+    for (const [idNumber, dto] of uniqueDtosMap) {
+      const enrichment = enrichmentData.get(idNumber) || {};
+      const existing = existingMap.get(idNumber);
+      
+      const participant = existing || new Participant();
+      
+      Object.assign(participant, {
+        ...dto,
+        ...enrichment,
+        name: dto.name, // Preserve original name
+        idNumber, // Normalized
+        event,
+        checkedIn: false,
+        checkedInBy: null,
+        checkedInAt: null,
+        updatedAt: now,
+        createdAt: existing ? existing.createdAt : now,
+      });
+      
+      toSave.push(participant);
+    }
+    
+    // 4. Save in chunks
+    try {
+      await this.participantRepository.save(toSave, { chunk: 200 });
+      this.logger.log(`✅ Bulk upserted ${toSave.length} participants (Batch deduplicated from ${dtos.length})`);
+    } catch (error) {
+      this.logger.error(`❌ DB Bulk save failed: ${error.message}`);
+      throw error;
     }
   }
 }
