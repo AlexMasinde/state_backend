@@ -178,19 +178,56 @@ export class ParticipantsService {
       return [];
     }
 
-    const normalizedIdNumber = String(searchTerm).trim();
-
-    // Only search by ID number (exact match)
-    const participant = await this.participantRepository.findOne({
-      where: { 
-        event: { eventId },
-        idNumber: normalizedIdNumber 
-      },
-      relations: ['event', 'checkedInBy'],
+    const query = String(searchTerm).trim();
+    
+    // 1. Phone number match
+    // Matches 07... 01... exactly 10 digits OR 254... +254... exactly 12/13 characters
+    const phoneRegex = /^(07|01)\d{8}$|^(254|\+254)(7|1)\d{8}$/;
+    if (phoneRegex.test(query)) {
+      return this.searchByPhone(eventId, query);
+    }
+    
+    // 2. ID match
+    // If it contains only digits (and maybe spaces/dashes), it's an ID search.
+    const strippedQuery = query.replace(/[\s-]/g, '');
+    const numericRegex = /^\d+$/;
+    if (numericRegex.test(strippedQuery)) {
+      const participant = await this.participantRepository.findOne({
+        where: { 
+          event: { eventId },
+          idNumber: strippedQuery 
+        },
+        relations: ['event', 'checkedInBy'],
+      });
+      return participant ? [participant] : [];
+    }
+    
+    // 3. Name match fallback
+    const qb = this.participantRepository.createQueryBuilder('participant')
+      .leftJoinAndSelect('participant.event', 'event')
+      .leftJoinAndSelect('participant.checkedInBy', 'checkedInBy')
+      .where('participant.event.eventId = :eventId', { eventId });
+      
+    // Pass 1: Multi-token match
+    const tokens = query.split(/\s+/).filter(t => t.length > 0);
+    tokens.forEach((token, index) => {
+      qb.andWhere(`participant.name LIKE :token${index}`, { [`token${index}`]: `%${token}%` });
     });
-
-    // Return array with single participant if found, empty array if not
-    return participant ? [participant] : [];
+    
+    let results = await qb.getMany();
+    
+    // Pass 2: Phonetic fallback if no exact token matches
+    if (results.length === 0) {
+      const phoneticQb = this.participantRepository.createQueryBuilder('participant')
+        .leftJoinAndSelect('participant.event', 'event')
+        .leftJoinAndSelect('participant.checkedInBy', 'checkedInBy')
+        .where('participant.event.eventId = :eventId', { eventId })
+        .andWhere(`SOUNDEX(participant.name) = SOUNDEX(:query)`, { query });
+        
+      results = await phoneticQb.getMany();
+    }
+    
+    return results;
   }
 
   async searchByPhone(eventId: string, phoneNumber: string): Promise<Participant[]> {

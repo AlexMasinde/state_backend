@@ -6,10 +6,13 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { UsersService } from './users.service';
 import { AtGuard } from '../auth/guards/at.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
@@ -25,6 +28,21 @@ export class UsersController {
   @Get()
   async getAllUsers() {
     return this.usersService.findAll();
+  }
+
+  @Get('reports/checkins')
+  @UseGuards(AdminGuard)
+  async getCheckinsReport(@Query('eventId') eventId: string | undefined, @Res() res: Response) {
+    const buffer = await this.usersService.generateCheckinsReport(eventId);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="checkins-report.xlsx"',
+    );
+    res.send(buffer);
   }
 
   @Get(':id')

@@ -10,6 +10,7 @@ import { CreateUserDto, UpdateUserDto } from './dto/users.dto';
 import * as argon2 from 'argon2';
 import { randomBytes } from 'crypto';
 import { EmailService } from '../email/email.service';
+import * as XLSX from 'xlsx';
 
 @Injectable()
 export class UsersService {
@@ -170,4 +171,37 @@ export class UsersService {
 
     return { message: 'User reactivated successfully' };
   }
+
+  async generateCheckinsReport(eventId?: string): Promise<Buffer> {
+    let query = `
+      SELECT 
+        u.name as "User Name", 
+        e.eventName as "Event Name", 
+        COUNT(p.id) as "Check-ins Count"
+      FROM users u
+      JOIN participants p ON u.id = p.checkedInBy
+      JOIN events e ON p.eventId = e.eventId
+      WHERE p.checkedIn = 1
+    `;
+
+    const params: any[] = [];
+    if (eventId) {
+      query += ` AND e.eventId = ?`;
+      params.push(eventId);
+    }
+
+    query += `
+      GROUP BY u.id, u.name, e.eventId, e.eventName
+      ORDER BY e.eventName, u.name
+    `;
+
+    const rawData = await this.repo.manager.query(query, params);
+
+    const ws = XLSX.utils.json_to_sheet(rawData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Checkins Report');
+    
+    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  }
 }
+
