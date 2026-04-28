@@ -148,10 +148,10 @@ export class VoterService {
 
         mergedData.set(id, {
           idNumber: id,
-          // Geography from Voter (Primary) or Adult (Fallback)
-          county: v?.county || a?.district || null,
-          constituency: v?.constituency || a?.division || null,
-          ward: v?.ward || a?.location || null,
+          // Geography from Voter ONLY (Not from Adult Population)
+          county: v?.county || null,
+          constituency: v?.constituency || null,
+          ward: v?.ward || null,
           pollingStation: v?.polling_center || null,
           
           // Identity & Culture
