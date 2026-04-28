@@ -202,8 +202,8 @@ export class ParticipantsService {
     const query = String(searchTerm).trim();
     
     // 1. Phone number match
-    // Matches 07... 01... exactly 10 digits OR 254... +254... exactly 12/13 characters
-    const phoneRegex = /^(07|01)\d{8}$|^(254|\+254)(7|1)\d{8}$/;
+    // Matches: 07.../01... (10 digits), 254.../+254... (12/13 chars), or bare 7.../1... (9 digits)
+    const phoneRegex = /^(07|01)\d{8}$|^(254|\+254)(7|1)\d{8}$|^(7|1)\d{8}$/;
     if (phoneRegex.test(query)) {
       return this.searchByPhone(eventId, query);
     }
@@ -256,28 +256,32 @@ export class ParticipantsService {
       return [];
     }
 
-    // Normalize phone number: remove leading zeros
-    let normalizedPhone = String(phoneNumber).trim();
-    normalizedPhone = normalizedPhone.replace(/^0+/, '');
+    // Normalize any Kenyan phone format down to the core 9 digits (e.g. 712345678)
+    let core = String(phoneNumber).trim();
+    // Strip +254 or 254 prefix
+    core = core.replace(/^\+?254/, '');
+    // Strip leading zero
+    core = core.replace(/^0+/, '');
 
-    // Search by normalized phone number (exact match)
-    // Also try with leading zero in case the stored number has it
-    const participant = await this.participantRepository
+    // Now 'core' should be 9 digits like 702192319
+    // Search against all possible stored formats
+    const participants = await this.participantRepository
       .createQueryBuilder('participant')
       .leftJoinAndSelect('participant.event', 'event')
       .leftJoinAndSelect('participant.checkedInBy', 'checkedInBy')
       .where('participant.event.eventId = :eventId', { eventId })
       .andWhere(
-        '(participant.phoneNumber = :normalizedPhone OR participant.phoneNumber = :withLeadingZero)',
+        '(participant.phoneNumber = :core OR participant.phoneNumber = :withZero OR participant.phoneNumber = :with254 OR participant.phoneNumber = :withPlus254)',
         { 
-          normalizedPhone,
-          withLeadingZero: `0${normalizedPhone}`
+          core,
+          withZero: `0${core}`,
+          with254: `254${core}`,
+          withPlus254: `+254${core}`,
         }
       )
-      .getOne();
+      .getMany();
 
-    // Return array with single participant if found, empty array if not
-    return participant ? [participant] : [];
+    return participants;
   }
 
   async getStats(eventId: string): Promise<{
