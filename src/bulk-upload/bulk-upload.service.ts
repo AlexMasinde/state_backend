@@ -193,6 +193,11 @@ export class BulkUploadService {
               origin: columnMapping ? record.recordData[columnMapping.originColumn] : record.recordData.origin,
               eventId: job.eventId
             };
+
+            if (columnMapping?.tokenNumberColumn) {
+              const rawToken = record.recordData[columnMapping.tokenNumberColumn];
+              dto.tokenNumber = rawToken === undefined || rawToken === null ? '' : String(rawToken).trim();
+            }
             
             batchDtos.push(dto);
             batchIds.push(normalizedId);

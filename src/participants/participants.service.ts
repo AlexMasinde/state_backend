@@ -1,9 +1,11 @@
 import {
   Injectable,
+  OnModuleInit,
   NotFoundException,
   InternalServerErrorException,
   Logger,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -16,7 +18,7 @@ import { SmsService } from '../sms/sms.service';
 import { VoterService } from '../voter/voter.service';
 
 @Injectable()
-export class ParticipantsService {
+export class ParticipantsService implements OnModuleInit {
   private readonly logger = new Logger(ParticipantsService.name);
 
   constructor(
@@ -28,12 +30,17 @@ export class ParticipantsService {
     private readonly voterService: VoterService,
   ) {}
 
+  async onModuleInit() {
+    await this.ensureTokenColumn();
+  }
+
   async create(dto: CreateParticipantDto): Promise<Participant> {
     const event = await this.eventService.findOne(dto.eventId);
     if (!event) throw new NotFoundException('Event not found');
     
     // Enrich with voter data if available
     const enrichedData = await this.enrichWithVoterData(dto);
+    const tokenNumber = this.normalizeToken(dto.tokenNumber);
     const now = new Date();
     
     // Check if a participant with this idNumber already exists
@@ -42,11 +49,14 @@ export class ParticipantsService {
       where: { idNumber: normalizedId },
       relations: ['event', 'checkedInBy'],
     });
+
+    await this.assertTokenAvailable(event.eventId, tokenNumber, existing?.id);
     
     if (existing) {
       // Update the existing participant with new data and reassign to the new event
       Object.assign(existing, {
         ...enrichedData,
+        tokenNumber,
         event,
         checkedIn: false,
         checkedInBy: null,
@@ -60,6 +70,7 @@ export class ParticipantsService {
     const participant = new Participant();
     Object.assign(participant, {
       ...enrichedData,
+      tokenNumber,
       event,
       createdAt: now,
       updatedAt: now,
@@ -93,6 +104,13 @@ export class ParticipantsService {
 
   async update(id: string, dto: UpdateParticipantDto): Promise<Participant> {
     const participant = await this.findOne(id);
+    if (dto.tokenNumber !== undefined) {
+      const tokenNumber = this.normalizeToken(dto.tokenNumber);
+      const eventId = dto.eventId ?? participant.event?.eventId;
+      await this.assertTokenAvailable(eventId, tokenNumber, participant.id);
+      participant.tokenNumber = tokenNumber;
+      delete dto.tokenNumber;
+    }
     Object.assign(participant, dto);
     participant.updatedAt = new Date();
     return this.participantRepository.save(participant);
@@ -148,14 +166,27 @@ export class ParticipantsService {
     }
 
     const now = new Date();
+    const normalizedDtos = dtos.map((dto) => ({
+      ...dto,
+      tokenNumber: dto.tokenNumber !== undefined
+        ? this.normalizeToken(dto.tokenNumber) ?? undefined
+        : undefined,
+    }));
+    await this.assertBulkTokensAvailable(
+      event.eventId,
+      normalizedDtos.map((dto) => ({
+        idNumber: String(dto.idNumber).trim(),
+        tokenNumber: dto.tokenNumber ?? null,
+      })),
+    );
     
     // For large datasets (100+ participants), use query builder for better performance
-    if (dtos.length > 100) {
+    if (normalizedDtos.length > 100) {
       const chunkSize = 500; // Insert in chunks of 500 for optimal database performance
-      const totalChunks = Math.ceil(dtos.length / chunkSize);
+      const totalChunks = Math.ceil(normalizedDtos.length / chunkSize);
       
       for (let i = 0; i < totalChunks; i++) {
-        const chunk = dtos.slice(i * chunkSize, (i + 1) * chunkSize);
+        const chunk = normalizedDtos.slice(i * chunkSize, (i + 1) * chunkSize);
         
         const values = chunk.map((dto) => ({
           name: dto.name,
@@ -163,6 +194,7 @@ export class ParticipantsService {
           phoneNumber: dto.phoneNumber,
           group: dto.group,
           origin: dto.origin,
+          tokenNumber: dto.tokenNumber ?? null,
           eventId: event.eventId,
           createdAt: now,
           updatedAt: now,
@@ -177,12 +209,13 @@ export class ParticipantsService {
           .execute();
       }
       
-      return { success: true, count: dtos.length };
+      return { success: true, count: normalizedDtos.length };
     } else {
       // For smaller datasets, use the standard insert
-      const participants = dtos.map((dto) =>
+      const participants = normalizedDtos.map((dto) =>
         this.participantRepository.create({
           ...dto,
+          tokenNumber: dto.tokenNumber ?? null,
           event,
           createdAt: now,
           updatedAt: now,
@@ -194,7 +227,11 @@ export class ParticipantsService {
     }
   }
 
-  async search(eventId: string, searchTerm: string): Promise<Participant[]> {
+  async search(
+    eventId: string,
+    searchTerm: string,
+    includeToken = false,
+  ): Promise<Participant[]> {
     if (!searchTerm || searchTerm.trim().length === 0) {
       return [];
     }
@@ -205,22 +242,30 @@ export class ParticipantsService {
     // Matches: 07.../01... (10 digits), 254.../+254... (12/13 chars), or bare 7.../1... (9 digits)
     const phoneRegex = /^(07|01)\d{8}$|^(254|\+254)(7|1)\d{8}$|^(7|1)\d{8}$/;
     if (phoneRegex.test(query)) {
-      return this.searchByPhone(eventId, query);
+      const phoneResults = await this.searchByPhone(eventId, query);
+      if (!includeToken || phoneResults.length > 0) {
+        return phoneResults;
+      }
     }
-    
-    // 2. ID match
-    // If it contains only digits (and maybe spaces/dashes), it's an ID search.
+
+    // 2. ID match. Digits are an ID. Token text is only considered on the web check-in.
     const strippedQuery = query.replace(/[\s-]/g, '');
     const numericRegex = /^\d+$/;
     if (numericRegex.test(strippedQuery)) {
-      const participant = await this.participantRepository.findOne({
-        where: { 
-          event: { eventId },
-          idNumber: strippedQuery 
-        },
-        relations: ['event', 'checkedInBy'],
-      });
-      return participant ? [participant] : [];
+      const participant = await this.findByIdNumber(eventId, strippedQuery);
+      if (participant) return [participant];
+      if (includeToken) {
+        const byToken = await this.findByToken(eventId, query);
+        if (byToken) return [byToken];
+      }
+      return [];
+    }
+
+    if (includeToken) {
+      const byId = await this.findByIdNumber(eventId, query);
+      if (byId) return [byId];
+      const byToken = await this.findByToken(eventId, query);
+      if (byToken) return [byToken];
     }
     
     // 3. Name match fallback
@@ -415,6 +460,18 @@ export class ParticipantsService {
 
     const idNumbers = Array.from(uniqueDtosMap.keys());
     if (idNumbers.length === 0) return;
+
+    const tokenEntries = Array.from(uniqueDtosMap.entries()).map(([idNumber, dto]) => ({
+      idNumber,
+      tokenNumber: dto.tokenNumber !== undefined ? this.normalizeToken(dto.tokenNumber) : null,
+      hasTokenField: dto.tokenNumber !== undefined,
+    }));
+    await this.assertBulkTokensAvailable(
+      event.eventId,
+      tokenEntries
+        .filter((entry) => entry.hasTokenField)
+        .map((entry) => ({ idNumber: entry.idNumber, tokenNumber: entry.tokenNumber })),
+    );
     
     // 2. Find existing participants in bulk
     const existingParticipants = await this.participantRepository.find({
@@ -431,12 +488,14 @@ export class ParticipantsService {
       const existing = existingMap.get(idNumber);
       
       const participant = existing || new Participant();
+      const { tokenNumber: rawToken, ...participantFields } = dto;
       
       Object.assign(participant, {
-        ...dto,
+        ...participantFields,
         ...enrichment,
         name: dto.name, // Preserve original name
         idNumber, // Normalized
+        ...(rawToken !== undefined ? { tokenNumber: this.normalizeToken(rawToken) } : {}),
         event,
         checkedIn: false,
         checkedInBy: null,
@@ -455,6 +514,107 @@ export class ParticipantsService {
     } catch (error) {
       this.logger.error(`❌ DB Bulk save failed: ${error.message}`);
       throw error;
+    }
+  }
+
+  private async ensureTokenColumn() {
+    const columns = await this.participantRepository.query(
+      `SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'participants' AND COLUMN_NAME = 'tokenNumber'`,
+    );
+    if (!columns.length) {
+      await this.participantRepository.query(
+        'ALTER TABLE participants ADD COLUMN tokenNumber varchar(64) NULL',
+      );
+      this.logger.log('Added participants.tokenNumber');
+    }
+
+    const indexes = await this.participantRepository.query(
+      `SHOW INDEX FROM participants WHERE Key_name = 'UQ_participants_event_token'`,
+    );
+    if (!indexes.length) {
+      await this.participantRepository.query(
+        'CREATE UNIQUE INDEX UQ_participants_event_token ON participants (eventId, tokenNumber)',
+      );
+      this.logger.log('Added unique token index for each event');
+    }
+  }
+
+  private normalizeToken(value?: string | null): string | null {
+    if (value === undefined || value === null) return null;
+    const trimmed = String(value).trim();
+    return trimmed.length ? trimmed : null;
+  }
+
+  private async findByIdNumber(eventId: string, idNumber: string): Promise<Participant | null> {
+    if (!idNumber) return null;
+    return this.participantRepository.findOne({
+      where: { event: { eventId }, idNumber },
+      relations: ['event', 'checkedInBy'],
+    });
+  }
+
+  private async findByToken(eventId: string, token: string): Promise<Participant | null> {
+    const trimmed = token.trim();
+    if (!trimmed) return null;
+
+    return this.participantRepository
+      .createQueryBuilder('participant')
+      .leftJoinAndSelect('participant.event', 'event')
+      .leftJoinAndSelect('participant.checkedInBy', 'checkedInBy')
+      .where('event.eventId = :eventId', { eventId })
+      .andWhere('participant.tokenNumber = :token', { token: trimmed })
+      .getOne();
+  }
+
+  private async assertTokenAvailable(
+    eventId: string,
+    tokenNumber: string | null,
+    excludeParticipantId?: string,
+  ): Promise<void> {
+    if (!tokenNumber || !eventId) return;
+    const existing = await this.findByToken(eventId, tokenNumber);
+    if (existing && existing.id !== excludeParticipantId) {
+      throw new ConflictException(
+        `Token number ${tokenNumber} is already assigned for this event`,
+      );
+    }
+  }
+
+  private async assertBulkTokensAvailable(
+    eventId: string,
+    entries: { idNumber: string; tokenNumber: string | null }[],
+  ): Promise<void> {
+    const seen = new Map<string, string>();
+    for (const entry of entries) {
+      if (!entry.tokenNumber) continue;
+      const key = entry.tokenNumber.toLowerCase();
+      const previousId = seen.get(key);
+      if (previousId && previousId !== entry.idNumber) {
+        throw new ConflictException(
+          `Token number ${entry.tokenNumber} is used more than once in this upload`,
+        );
+      }
+      seen.set(key, entry.idNumber);
+    }
+
+    const tokens = Array.from(seen.keys());
+    if (tokens.length === 0) return;
+
+    const holders = await this.participantRepository
+      .createQueryBuilder('participant')
+      .leftJoin('participant.event', 'event')
+      .where('event.eventId = :eventId', { eventId })
+      .andWhere('participant.tokenNumber IN (:...tokens)', { tokens })
+      .getMany();
+
+    for (const holder of holders) {
+      if (!holder.tokenNumber) continue;
+      const ownerId = seen.get(holder.tokenNumber.toLowerCase());
+      if (ownerId && ownerId !== holder.idNumber) {
+        throw new ConflictException(
+          `Token number ${holder.tokenNumber} is already assigned for this event`,
+        );
+      }
     }
   }
 }

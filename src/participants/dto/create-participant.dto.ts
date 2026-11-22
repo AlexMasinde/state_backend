@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsUUID, IsOptional, IsBoolean } from 'class-validator';
+import { IsNotEmpty, IsString, IsUUID, IsOptional, IsBoolean, MaxLength } from 'class-validator';
 
 export class CreateParticipantDto {
   @IsNotEmpty()
@@ -24,6 +24,11 @@ export class CreateParticipantDto {
   @IsNotEmpty()
   @IsString()
   phoneNumber: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  tokenNumber?: string;
 
   // Optional voter service fields
   @IsOptional()

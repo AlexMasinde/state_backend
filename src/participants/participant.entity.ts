@@ -10,6 +10,7 @@ import { Event } from '../event/event.entity';
 import { User } from '../users/users.entity';
 
 @Entity('participants')
+@Index('UQ_participants_event_token', ['event', 'tokenNumber'], { unique: true })
 export class Participant {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -44,6 +45,9 @@ export class Participant {
   @Index()
   @Column()
   phoneNumber: string;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  tokenNumber: string | null;
 
   @Column({ nullable: true, type: 'timestamp' })
   checkedInAt: Date;

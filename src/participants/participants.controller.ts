@@ -59,8 +59,13 @@ export class ParticipantsController {
   }
 
   @Get('event/:eventId/search')
-  search(@Param('eventId') eventId: string, @Query('q') searchTerm: string) {
-    return this.participantsService.search(eventId, searchTerm);
+  search(
+    @Param('eventId') eventId: string,
+    @Query('q') searchTerm: string,
+    @Query('includeToken') includeToken?: string,
+  ) {
+    const withToken = includeToken === '1' || includeToken === 'true';
+    return this.participantsService.search(eventId, searchTerm, withToken);
   }
 
   @Get('event/:eventId/stats')
