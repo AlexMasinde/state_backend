@@ -26,7 +26,7 @@ export class BulkUploadRecord {
   })
   status: 'pending' | 'processing' | 'completed' | 'failed';
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   errorMessage: string;
 
   @Column({ nullable: true })

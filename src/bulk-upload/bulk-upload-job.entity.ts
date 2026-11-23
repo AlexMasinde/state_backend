@@ -43,7 +43,7 @@ export class BulkUploadJob {
   })
   status: 'pending' | 'processing' | 'completed' | 'failed';
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   errorMessage: string;
 
   @CreateDateColumn()

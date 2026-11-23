@@ -36,6 +36,9 @@ export class BulkUploadService {
     }
   }
 
+  private errorColumnsReady = false;
+  private errorMessageMaxLen = 240; // safe for legacy varchar(255) until TEXT migrate
+
   private getErrorMessage(error: any): string {
     if (!error) return 'Unknown error';
 
@@ -51,6 +54,35 @@ export class BulkUploadService {
 
     if (error.message) return String(error.message);
     return String(error);
+  }
+
+  /** Keep messages usable in UI while avoiding DB overflow before TEXT migration. */
+  private truncateErrorMessage(message: string): string {
+    const maxLen = this.errorMessageMaxLen;
+    const text = String(message || '').trim();
+    if (text.length <= maxLen) return text;
+    return `${text.slice(0, Math.max(maxLen - 15, 0))}… (truncated)`;
+  }
+
+  private async ensureErrorMessageColumns(): Promise<void> {
+    if (this.errorColumnsReady) return;
+    try {
+      await this.jobRepository.query(
+        `ALTER TABLE bulk_upload_jobs MODIFY COLUMN errorMessage TEXT NULL`,
+      );
+      await this.recordRepository.query(
+        `ALTER TABLE bulk_upload_records MODIFY COLUMN errorMessage TEXT NULL`,
+      );
+      this.errorMessageMaxLen = 4000;
+      this.errorColumnsReady = true;
+      this.logger.log('Ensured bulk upload errorMessage columns are TEXT');
+    } catch (error) {
+      // Column may already be TEXT, or DB user may lack ALTER — keep short truncate.
+      this.logger.warn(
+        `Could not widen errorMessage columns: ${this.getErrorMessage(error)}`,
+      );
+      this.errorColumnsReady = true;
+    }
   }
 
   private isBlank(value: unknown): boolean {
@@ -169,12 +201,13 @@ export class BulkUploadService {
     this.logger.log(`Starting job ${job.id} for event ${job.eventId}`);
 
     try {
+      await this.ensureErrorMessageColumns();
       await this.updateJobStatus(job.id, 'processing');
       await this.processJobWithVoterLookups(job);
       await this.finalizeJobOutcome(job.id);
       this.logger.log(`Job ${job.id} finished with status evaluation`);
     } catch (error) {
-      const message = this.getErrorMessage(error);
+      const message = this.truncateErrorMessage(this.getErrorMessage(error));
       this.logger.error(`Job ${job.id} failed: ${message}`, error?.stack);
       await this.updateJobProgressFromRecords(job.id);
       await this.updateJobStatus(job.id, 'failed', message);
@@ -314,7 +347,7 @@ export class BulkUploadService {
         this.logger.log(`✅ Batch ${Math.floor(i/batchSize) + 1} complete (${Math.min(i + batchSize, pendingRecords.length)}/${pendingRecords.length})`);
 
       } catch (error) {
-        const message = this.getErrorMessage(error);
+        const message = this.truncateErrorMessage(this.getErrorMessage(error));
         this.logger.error(`❌ Batch starting at index ${i} failed: ${message}`);
         for (const record of batch) {
           await this.recordRepository.update(record.id, { 
@@ -342,11 +375,12 @@ export class BulkUploadService {
       const sampleText = sampleFailures.length
         ? sampleFailures.map((f) => f.errorMessage).filter(Boolean)[0]
         : null;
-      const message =
+      const message = this.truncateErrorMessage(
         sampleText ||
-        (completedCount === 0
-          ? `Upload finished with 0 of ${job.totalRecords} records processed`
-          : `${failedCount} of ${job.totalRecords} record(s) failed during upload`);
+          (completedCount === 0
+            ? `Upload finished with 0 of ${job.totalRecords} records processed`
+            : `${failedCount} of ${job.totalRecords} record(s) failed during upload`),
+      );
       await this.updateJobStatus(jobId, 'failed', message);
       throw new Error(message);
     }
@@ -426,7 +460,9 @@ export class BulkUploadService {
   private async updateJobStatus(jobId: string, status: BulkUploadJob['status'], errorMessage?: string) {
     await this.jobRepository.update(jobId, {
       status,
-      errorMessage: errorMessage ?? null,
+      errorMessage: errorMessage
+        ? this.truncateErrorMessage(errorMessage)
+        : null,
       completedAt: status === 'completed' || status === 'failed' ? new Date() : null
     });
   }
