@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, UseGuards, Request, BadRequestException, NotFoundException, ForbiddenException, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards, BadRequestException, NotFoundException, UseInterceptors, UploadedFile, InternalServerErrorException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { BulkUploadService } from './bulk-upload.service';
 import { AtGuard } from '../auth/guards/at.guard';
@@ -51,7 +51,7 @@ export class BulkUploadController {
       // Validate required mappings
       if (!mapping.idNumberColumn || !mapping.nameColumn || !mapping.phoneNumberColumn || !mapping.groupColumn || !mapping.originColumn) {
         this.logger.warn('Missing required column mappings:', JSON.stringify(mapping));
-        throw new BadRequestException('Missing required column mappings');
+        throw new BadRequestException('Missing required column mappings: ID Number, Name, Phone Number, Group, and Origin are required');
       }
 
       // Parse records from file
@@ -80,14 +80,10 @@ export class BulkUploadController {
         this.logger.warn('Bad request:', error.message);
         throw error;
       }
+      const message = error?.message || 'Failed to upload file';
       this.logger.error('Failed to upload file:', error);
       this.logger.error('Error stack:', error.stack);
-      this.logger.error('Error details:', {
-        name: error?.name,
-        message: error?.message,
-        code: error?.code,
-      });
-      throw new Error('Failed to upload file');
+      throw new InternalServerErrorException(message);
     }
   }
 
@@ -103,26 +99,15 @@ export class BulkUploadController {
         throw new NotFoundException('Job not found');
       }
 
-      return {
-        jobId: job.id,
-        fileName: job.fileName,
-        totalRecords: job.totalRecords,
-        processedRecords: job.processedRecords,
-        voterLookupsCompleted: job.voterLookupsCompleted,
-        voterLookupsFailed: job.voterLookupsFailed,
-        recordsPending: job.recordsPending,
-        status: job.status,
-        progress: job.totalRecords > 0 ? (job.processedRecords / job.totalRecords) * 100 : 0,
-        createdAt: job.createdAt,
-        completedAt: job.completedAt,
-        error: job.errorMessage,
-      };
+      return this.bulkUploadService.toJobProgressPayload(job);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
       }
       this.logger.error('Failed to get job progress:', error);
-      throw new Error('Failed to get job progress');
+      throw new InternalServerErrorException(
+        error?.message || 'Failed to get job progress',
+      );
     }
   }
 
@@ -133,21 +118,14 @@ export class BulkUploadController {
   ) {
     try {
       const jobs = await this.bulkUploadService.getEventJobs(eventId);
-      
-      return jobs.map(job => ({
-        id: job.id,
-        jobId: job.id,
-        fileName: job.fileName,
-        totalRecords: job.totalRecords,
-        processedRecords: job.processedRecords,
-        status: job.status,
-        progress: job.totalRecords > 0 ? (job.processedRecords / job.totalRecords) * 100 : 0,
-        createdAt: job.createdAt,
-        completedAt: job.completedAt,
-      }));
+      return Promise.all(
+        jobs.map((job) => this.bulkUploadService.toJobProgressPayload(job)),
+      );
     } catch (error) {
       this.logger.error('Failed to get event jobs:', error);
-      throw new Error('Failed to get event jobs');
+      throw new InternalServerErrorException(
+        error?.message || 'Failed to get event jobs',
+      );
     }
   }
 
@@ -170,7 +148,7 @@ export class BulkUploadController {
       };
     } catch (error) {
       this.logger.error('Failed to retry job:', error);
-      throw new Error(error.message || 'Failed to retry job');
+      throw new BadRequestException(error.message || 'Failed to retry job');
     }
   }
 
@@ -203,6 +181,7 @@ export class BulkUploadController {
       
       return records;
     } catch (error) {
+      if (error instanceof BadRequestException) throw error;
       throw new BadRequestException('Failed to parse Excel file: ' + error.message);
     }
   }

@@ -584,37 +584,63 @@ export class ParticipantsService implements OnModuleInit {
     eventId: string,
     entries: { idNumber: string; tokenNumber: string | null }[],
   ): Promise<void> {
-    const seen = new Map<string, string>();
+    const seen = new Map<string, { idNumber: string; tokenNumber: string }>();
+    const duplicateInFile: string[] = [];
+
     for (const entry of entries) {
       if (!entry.tokenNumber) continue;
       const key = entry.tokenNumber.toLowerCase();
-      const previousId = seen.get(key);
-      if (previousId && previousId !== entry.idNumber) {
-        throw new ConflictException(
-          `Token number ${entry.tokenNumber} is used more than once in this upload`,
+      const previous = seen.get(key);
+      if (previous && previous.idNumber !== entry.idNumber) {
+        duplicateInFile.push(
+          `${entry.tokenNumber} (IDs ${previous.idNumber} and ${entry.idNumber})`,
         );
+        continue;
       }
-      seen.set(key, entry.idNumber);
+      seen.set(key, { idNumber: entry.idNumber, tokenNumber: entry.tokenNumber });
     }
 
-    const tokens = Array.from(seen.keys());
-    if (tokens.length === 0) return;
+    if (duplicateInFile.length > 0) {
+      const preview = duplicateInFile.slice(0, 5).join('; ');
+      const more =
+        duplicateInFile.length > 5
+          ? ` (+${duplicateInFile.length - 5} more)`
+          : '';
+      throw new ConflictException(
+        `Duplicate token numbers in this upload (${duplicateInFile.length}): ${preview}${more}`,
+      );
+    }
+
+    const tokenValues = Array.from(seen.values()).map((v) => v.tokenNumber);
+    if (tokenValues.length === 0) return;
 
     const holders = await this.participantRepository
       .createQueryBuilder('participant')
       .leftJoin('participant.event', 'event')
       .where('event.eventId = :eventId', { eventId })
-      .andWhere('participant.tokenNumber IN (:...tokens)', { tokens })
+      .andWhere('participant.tokenNumber IN (:...tokens)', { tokens: tokenValues })
       .getMany();
 
+    const alreadyAssigned: string[] = [];
     for (const holder of holders) {
       if (!holder.tokenNumber) continue;
-      const ownerId = seen.get(holder.tokenNumber.toLowerCase());
-      if (ownerId && ownerId !== holder.idNumber) {
-        throw new ConflictException(
-          `Token number ${holder.tokenNumber} is already assigned for this event`,
+      const intended = seen.get(holder.tokenNumber.toLowerCase());
+      if (intended && intended.idNumber !== holder.idNumber) {
+        alreadyAssigned.push(
+          `${holder.tokenNumber} already on ${holder.name || 'participant'} (${holder.idNumber}), upload wants ${intended.idNumber}`,
         );
       }
+    }
+
+    if (alreadyAssigned.length > 0) {
+      const preview = alreadyAssigned.slice(0, 5).join('; ');
+      const more =
+        alreadyAssigned.length > 5
+          ? ` (+${alreadyAssigned.length - 5} more)`
+          : '';
+      throw new ConflictException(
+        `Token number conflicts with existing participants (${alreadyAssigned.length}): ${preview}${more}`,
+      );
     }
   }
 }
